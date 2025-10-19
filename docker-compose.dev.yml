@@ -7,17 +7,20 @@ services:
       - "${APP_PORT}:3000"
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
-    depends_on:
-      - postgres
-      - redis
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
       - .:/app
       - /app/node_modules
-    command: npm run start:dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # ollama:
+      #   condition: service_healthy
+    restart: always
 
   postgres:
-    image: postgres:15-alpine
+    image: ankane/pgvector:latest
+    container_name: postgres_vector
     ports:
       - "5432:5432"
     environment:
@@ -26,7 +29,32 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - MODEL_NAME=${MODEL_NAME}
+    command: /init-scripts/pull-llama-model.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      # test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags | jq -e '.models[] | select(.name == \"${MODEL_NAME}\")' > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
 
 volumes:
   postgres-data:
-  redis-data:
+  ollama_data:
