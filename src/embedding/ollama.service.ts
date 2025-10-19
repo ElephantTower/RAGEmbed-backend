@@ -23,15 +23,24 @@ export class OllamaService {
   ): Promise<number[]> {
     try {
       const response = await firstValueFrom(
-        this.httpService.post(this.url, {
-          model: modelName,
-          prompt,
-        }),
+        this.httpService.post(
+          this.url,
+          {
+            model: modelName,
+            prompt,
+          },
+          { timeout: 30000 },
+        ),
       );
       this.logger.log(`Generated embedding with ${modelName}`);
       return response.data.embedding;
     } catch (error) {
       this.logger.error('Failed to generate embedding', error);
+      if (error.response) {
+        this.logger.error(
+          `HTTP error: ${error.response.status} - ${error.response.data}`,
+        );
+      }
       throw error;
     }
   }
