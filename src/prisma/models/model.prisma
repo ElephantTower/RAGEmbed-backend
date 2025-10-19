@@ -1,0 +1,9 @@
+model Model {
+  id         String @id @default(cuid())
+  nameInOllama String @unique
+
+  embeddings Embedding[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

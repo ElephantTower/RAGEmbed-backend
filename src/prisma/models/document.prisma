@@ -1,0 +1,10 @@
+model Document {
+  id    String @id @default(cuid())
+  title String
+  link  String @unique
+
+  embeddings Embedding[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

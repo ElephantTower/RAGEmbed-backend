@@ -1,0 +1,16 @@
+model Embedding {
+  id String @id @default(cuid())
+
+  documentId String
+  modelId    String
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  model    Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  vector Unsupported("vector(1536)")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([documentId, modelId])
+}
