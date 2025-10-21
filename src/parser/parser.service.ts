@@ -34,17 +34,23 @@ export class ParserService {
     private ollamaService: OllamaService,
     private embeddingRepository: EmbeddingRepository,
   ) {
-    this.baseUrl = this.configService.get('DOCS_BASE_URL', 'https://pascalabc.net/downloads/pabcnethelp/');
-    this.contentsUrl = this.configService.get('DOCS_CONTENT_URL', 'https://pascalabc.net/downloads/pabcnethelp/webhelpcontents.htm');
+    this.baseUrl = this.configService.get(
+      'DOCS_BASE_URL',
+      'https://pascalabc.net/downloads/pabcnethelp/',
+    );
+    this.contentsUrl = this.configService.get(
+      'DOCS_CONTENT_URL',
+      'https://pascalabc.net/downloads/pabcnethelp/webhelpcontents.htm',
+    );
     this.models = this.configService.get('MODEL_NAMES').split(' ');
     this.collectEmbeddings();
   }
 
-  async parseTitels(): Promise<{ title: string; href: string }[]> {
+  async parseTitles(): Promise<{ title: string; href: string }[]> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(this.contentsUrl, { responseType: 'text' })
-    );
+        this.httpService.get(this.contentsUrl, { responseType: 'text' }),
+      );
       const html = response.data;
 
       const dom = new JSDOM(html);
@@ -59,7 +65,11 @@ export class ParserService {
           const anchor = div.querySelector('a[href]');
           if (anchor) {
             const href = anchor.getAttribute('href') || '';
-            if (href !== '#' && href.startsWith('topics/') && href.endsWith('.html')) {
+            if (
+              href !== '#' &&
+              href.startsWith('topics/') &&
+              href.endsWith('.html')
+            ) {
               const span = div.querySelector('span[id^="l"]');
               const title = span ? span.textContent?.trim() || '' : '';
               if (title) {
@@ -79,15 +89,15 @@ export class ParserService {
   async getTextFromDocument(hrefPart: string): Promise<string> {
     try {
       const fullUrl = `${this.baseUrl}${hrefPart}`;
-      const response = await firstValueFrom( 
-        this.httpService.get(fullUrl, { responseType: 'text' })
+      const response = await firstValueFrom(
+        this.httpService.get(fullUrl, { responseType: 'text' }),
       );
       const html = response.data;
 
       const dom = new JSDOM(html);
       const document = dom.window.document;
 
-      document.querySelectorAll('script').forEach(script => script.remove());
+      document.querySelectorAll('script').forEach((script) => script.remove());
 
       const body = document.querySelector('body');
       if (!body) return '';
@@ -103,7 +113,10 @@ export class ParserService {
 
       return text.trim();
     } catch (error) {
-      this.logger.error("Couldn't load or parse the text of the document:", error);
+      this.logger.error(
+        "Couldn't load or parse the text of the document:",
+        error,
+      );
       return '';
     }
   }
@@ -111,7 +124,7 @@ export class ParserService {
   async chunkDocument(
     text: string,
     documentId: string,
-    chunkSize: number, 
+    chunkSize: number,
     chunkOverlap: number,
   ): Promise<Chunk[]> {
     if (!text) return [];
@@ -126,35 +139,40 @@ export class ParserService {
     return chunks.map((chunk, index) => ({
       chunkId: index,
       text: chunk,
-      documentId: documentId
+      documentId: documentId,
     }));
   }
 
   async collectEmbeddings(
     delayMs: number = 1000,
-    chunkSize: number = 1500, 
+    chunkSize: number = 1500,
     chunkOverlap: number = 300,
-    batchSize: number = 16
+    batchSize: number = 16,
   ) {
-    const documents = await this.parseTitels();
+    const documents = await this.parseTitles();
 
     // ------------------------------
-    const updatedDocuments = documents.map(document => ({
+    const updatedDocuments = documents.map((document) => ({
       ...document,
-      documentId: document.title
+      documentId: document.title,
     }));
     // ------------------------------
 
     const allChunks: Chunk[] = [];
     for (const document of updatedDocuments.slice(0, 5)) {
       const text = await this.getTextFromDocument(document.href);
-      if (!text.trim()){
+      if (!text.trim()) {
         continue;
       }
-      const chunks = await this.chunkDocument(text, document.documentId, chunkSize, chunkOverlap);
-      const updatedChunks = chunks.map(chunk => ({
+      const chunks = await this.chunkDocument(
+        text,
+        document.documentId,
+        chunkSize,
+        chunkOverlap,
+      );
+      const updatedChunks = chunks.map((chunk) => ({
         ...chunk,
-        documentId: document.documentId
+        documentId: document.documentId,
       }));
       allChunks.push(...updatedChunks);
       await delay(delayMs);
@@ -162,15 +180,22 @@ export class ParserService {
 
     const embeddings: EmbeddingResult[] = [];
     for (const model of this.models) {
-      this.logger.log(`Processing model: ${model}, chunks count:  ${allChunks.length}`);
+      this.logger.log(
+        `Processing model: ${model}, chunks count:  ${allChunks.length}`,
+      );
       for (let i = 0; i < allChunks.length; i += batchSize) {
         const batch = allChunks.slice(i, i + batchSize);
         this.logger.log(`Processing batch ${i / batchSize} for model ${model}`);
-        const input = batch.map(chunk => chunk.text);
+        const input = batch.map((chunk) => chunk.text);
         try {
-          const batchEmbeddings = await this.ollamaService.generateEmbeddings(input, model);
+          const batchEmbeddings = await this.ollamaService.generateEmbeddings(
+            input,
+            model,
+          );
           if (batchEmbeddings.length !== batch.length) {
-            console.error(`Mismatch in batch size for model ${model}, expected ${batch.length}, got ${batchEmbeddings.length}`);
+            this.logger.error(
+              `Mismatch in batch size for model ${model}, expected ${batch.length}, got ${batchEmbeddings.length}`,
+            );
             continue;
           }
           const batchResults = batch.map((chunk, index) => ({
@@ -181,7 +206,10 @@ export class ParserService {
           }));
           embeddings.push(...batchResults);
         } catch (error) {
-          this.logger.error(`Error processing batch ${i} for model ${model}:`, error);
+          this.logger.error(
+            `Error processing batch ${i} for model ${model}:`,
+            error,
+          );
         }
       }
     }
