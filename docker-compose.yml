@@ -40,9 +40,11 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+      - ./init-scripts/pull-llama-model.sh:/init-ollama.sh
     environment:
-      - MODEL_NAME=${MODEL_NAME}
-    command: /init-scripts/pull-llama-model.sh
+      - MODEL_NAMES=${MODEL_NAMES}
+    entrypoint: /bin/sh
+    command: /init-ollama.sh
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       # test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags | jq -e '.models[] | select(.name == \"${MODEL_NAME}\")' > /dev/null"]
