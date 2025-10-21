@@ -14,26 +14,26 @@ export class OllamaService {
   ) {
     this.url =
       this.configService.get('OLLAMA_URL', 'http://ollama:11434') +
-      '/api/embeddings';
+      '/api/embed';
   }
 
-  async generateEmbedding(
-    prompt: string,
-    modelName: string = 'embedding-gemma',
-  ): Promise<number[]> {
+  async generateEmbeddings(
+    input: string[],
+    modelName: string = 'embeddinggemma',
+  ): Promise<number[][]> {
     try {
       const response = await firstValueFrom(
         this.httpService.post(
           this.url,
           {
             model: modelName,
-            prompt,
+            input,
           },
           { timeout: 30000 },
         ),
       );
-      this.logger.log(`Generated embedding with ${modelName}`);
-      return response.data.embedding;
+      this.logger.log(`Generated embedding with ${modelName}, batchSize: ${response.data.embeddings.length}`);
+      return response.data.embeddings;
     } catch (error) {
       this.logger.error('Failed to generate embedding', error);
       if (error.response) {

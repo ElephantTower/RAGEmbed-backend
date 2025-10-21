@@ -7,7 +7,7 @@ model Embedding {
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   model    Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
-  vector Unsupported("vector(1536)")
+  vector Unsupported("vector(768)")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

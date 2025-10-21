@@ -16,11 +16,11 @@ export class RAGService {
     n: number = 5,
   ): Promise<{ title: string; link: string; distance: number }[]> {
     try {
-      const queryVector = await this.ollamaService.generateEmbedding(query); // TODO add model name?
+      const queryVector = await this.ollamaService.generateEmbeddings([query]); // TODO add model name?
       this.logger.log(`Generated embedding for query: ${query.substring(0, 50)}...`);
 
       const results = await this.embeddingRepository.findSimilar(
-        queryVector,
+        queryVector[0],
         n,
       );
       this.logger.log(`Found ${results.length} similar documents`);
