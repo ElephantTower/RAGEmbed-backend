@@ -31,9 +31,9 @@ export class EmbeddingRepository {
 
     const result = await this.prisma.$queryRaw<RawEmbedding[]>`
       INSERT INTO "Embedding" (documentId, modelId, vector)
-      VALUES (${documentId}, ${modelId}, ${vectorSql}::vector(1536))
+      VALUES (${documentId}, ${modelId}, ${vectorSql}::vector(768))
       ON CONFLICT (documentId, modelId)
-      DO UPDATE SET vector = ${vectorSql}::vector(1536)
+      DO UPDATE SET vector = ${vectorSql}::vector(768)
       RETURNING *
     `;
 
@@ -70,7 +70,7 @@ export class EmbeddingRepository {
         SELECT 
             d.title,
             d.link,
-            MIN(e.vector <=> ${querySql}::vector(1536)) AS min_distance 
+            MIN(e.vector <=> ${querySql}::vector(768)) AS min_distance 
         FROM "Embedding" e
         INNER JOIN "Document" d ON e.documentId = d.id
         GROUP BY d.id, d.title, d.link
