@@ -4,6 +4,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { OllamaService } from 'src/embedding/ollama.service';
 import { EmbeddingRepository } from 'src/embedding/embedding.repository';
+import { DocumentsRepository } from './documents.repository';
 import { JSDOM } from 'jsdom';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { delay } from 'src/utils/delay.util';
@@ -33,6 +34,7 @@ export class ParserService {
     private httpService: HttpService,
     private ollamaService: OllamaService,
     private embeddingRepository: EmbeddingRepository,
+    private documentsRepository: DocumentsRepository,
   ) {
     this.baseUrl = this.configService.get(
       'DOCS_BASE_URL',
@@ -43,7 +45,6 @@ export class ParserService {
       'https://pascalabc.net/downloads/pabcnethelp/webhelpcontents.htm',
     );
     this.models = this.configService.get('MODEL_NAMES').split(' ');
-    this.collectEmbeddings();
   }
 
   async parseTitles(): Promise<{ title: string; href: string }[]> {
@@ -148,71 +149,101 @@ export class ParserService {
     chunkSize: number = 1500,
     chunkOverlap: number = 300,
     batchSize: number = 16,
+    limit: number = 5,
   ) {
     const documents = await this.parseTitles();
 
-    // ------------------------------
-    const updatedDocuments = documents.map((document) => ({
-      ...document,
-      documentId: document.title,
-    }));
-    // ------------------------------
+    const processedDocuments: { title: string; href: string; documentId: string }[] = [];
+    for (const doc of documents) {
+      const fullLink = `${this.baseUrl}${doc.href}`;
+      try {
+        const dbDoc = await this.documentsRepository.upsertDocument(doc.title, fullLink);
+        processedDocuments.push({ ...doc, documentId: dbDoc.id });
+      } catch (error) {
+        this.logger.error(`Failed to upsert document ${doc.title}:`, error);
+      }
+    }
 
-    const allChunks: Chunk[] = [];
-    for (const document of updatedDocuments.slice(0, 5)) {
+    const limitedDocuments = processedDocuments.slice(0, limit);
+    let processedCount = 0;
+
+    for (const document of limitedDocuments) {
       const text = await this.getTextFromDocument(document.href);
       if (!text.trim()) {
+        this.logger.warn(`No text extracted for document: ${document.title}`);
         continue;
       }
+
       const chunks = await this.chunkDocument(
         text,
         document.documentId,
         chunkSize,
         chunkOverlap,
       );
-      const updatedChunks = chunks.map((chunk) => ({
-        ...chunk,
-        documentId: document.documentId,
-      }));
-      allChunks.push(...updatedChunks);
+
+      if (chunks.length === 0) {
+        this.logger.warn(`No chunks created for document: ${document.title}`);
+        continue;
+      }
+
+      this.logger.log(`Processing document: ${document.title}, chunks: ${chunks.length}`);
+
+      for (const model of this.models) {
+        this.logger.log(`  Model: ${model}`);
+        let sum = new Array(768).fill(0);
+        let totalChunks = 0;
+
+        for (let i = 0; i < chunks.length; i += batchSize) {
+          const batchChunks = chunks.slice(i, i + batchSize);
+          const input = batchChunks.map((chunk) => chunk.text);
+
+          try {
+            const batchEmbeddings = await this.ollamaService.generateEmbeddings(
+              input,
+              model,
+            );
+
+            if (batchEmbeddings.length !== input.length) {
+              this.logger.error(
+                `Mismatch in batch size for document ${document.title}, model ${model}, expected ${input.length}, got ${batchEmbeddings.length}`,
+              );
+              continue;
+            }
+
+            for (const embedding of batchEmbeddings) {
+              for (let j = 0; j < embedding.length; j++) {
+                sum[j] += embedding[j];
+              }
+              totalChunks++;
+            }
+          } catch (error) {
+            this.logger.error(
+              `Error processing batch ${i / batchSize + 1} for document ${document.title}, model ${model}:`,
+              error,
+            );
+          }
+        }
+
+        if (totalChunks === 0) {
+          this.logger.warn(`No embeddings generated for ${document.title} with ${model}`);
+          continue;
+        }
+
+        const avg = sum.map((v) => v / totalChunks);
+        try {
+          const modelId = await this.embeddingRepository.getModelId(model);
+          await this.embeddingRepository.saveEmbedding(document.documentId, modelId, avg);
+          this.logger.log(`Saved average embedding for ${document.title} with ${model}`);
+        } catch (error) {
+          this.logger.error(`Failed to save embedding for ${document.title} with ${model}:`, error);
+        }
+      }
+
+      processedCount++;
       await delay(delayMs);
     }
 
-    const embeddings: EmbeddingResult[] = [];
-    for (const model of this.models) {
-      this.logger.log(
-        `Processing model: ${model}, chunks count:  ${allChunks.length}`,
-      );
-      for (let i = 0; i < allChunks.length; i += batchSize) {
-        const batch = allChunks.slice(i, i + batchSize);
-        this.logger.log(`Processing batch ${i / batchSize} for model ${model}`);
-        const input = batch.map((chunk) => chunk.text);
-        try {
-          const batchEmbeddings = await this.ollamaService.generateEmbeddings(
-            input,
-            model,
-          );
-          if (batchEmbeddings.length !== batch.length) {
-            this.logger.error(
-              `Mismatch in batch size for model ${model}, expected ${batch.length}, got ${batchEmbeddings.length}`,
-            );
-            continue;
-          }
-          const batchResults = batch.map((chunk, index) => ({
-            chunkId: chunk.chunkId,
-            documentId: chunk.documentId,
-            modelName: model,
-            embedding: batchEmbeddings[index],
-          }));
-          embeddings.push(...batchResults);
-        } catch (error) {
-          this.logger.error(
-            `Error processing batch ${i} for model ${model}:`,
-            error,
-          );
-        }
-      }
-    }
-    return embeddings;
+    this.logger.log(`Collection completed. Processed ${processedCount} documents.`);
+    return { success: true, processed: processedCount, total: limitedDocuments.length };
   }
 }

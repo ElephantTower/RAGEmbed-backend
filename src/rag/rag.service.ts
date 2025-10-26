@@ -12,16 +12,25 @@ export class RAGService {
   ) {}
 
   async findSimilar(
-    query: string,
-    n: number = 5,
+    input: string,
+    model_name: string,
+    metric: string,
+    length: number = 5,
   ): Promise<{ title: string; link: string; distance: number }[]> {
     try {
-      const queryVector = await this.ollamaService.generateEmbeddings([query]); // TODO add model name?
-      this.logger.log(`Generated embedding for query: ${query.substring(0, 50)}...`);
+      const queryVector = await this.ollamaService.generateEmbeddings([input], model_name);
+      this.logger.log(
+        `Generated embedding for query: ${input.substring(0, 50)}... with model ${model_name}`,
+      );
+
+      const modelId = await this.embeddingRepository.getModelId(model_name);
+      this.logger.log(`Using model ID: ${modelId}`);
 
       const results = await this.embeddingRepository.findSimilar(
         queryVector[0],
-        n,
+        modelId,
+        metric,
+        length,
       );
       this.logger.log(`Found ${results.length} similar documents`);
 

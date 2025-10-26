@@ -8,9 +8,14 @@ export class RAGController {
 
   @Post('findSimilar')
   async findSimilar(@Body() dto: FindSimilarDto) {
-    const { query, n } = dto;
+    const { input, model_name, metric, length } = dto;
 
-    const results = await this.ragService.findSimilar(query, n);
+    const results = await this.ragService.findSimilar(
+      input,
+      model_name,
+      metric,
+      length,
+    );
 
     return results;
   }

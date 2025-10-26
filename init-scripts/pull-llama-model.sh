@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e  # Остановка при ошибке
+set -e
 echo "Starting Ollama server..."
 ollama serve & 
 sleep 5

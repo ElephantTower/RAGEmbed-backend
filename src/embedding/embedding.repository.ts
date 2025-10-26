@@ -60,28 +60,63 @@ export class EmbeddingRepository {
 
   async findSimilar(
     queryVector: number[],
+    modelId: string,
+    metric: string,
     limit: number = 5,
   ): Promise<{ title: string; link: string; distance: number }[]> {
     const querySql = toSql(queryVector);
 
+    let distanceOp: string;
+    switch (metric.toLowerCase()) {
+      case 'cosine':
+        distanceOp = '<=>';
+        break;
+      case 'euclidean':
+      case 'l2':
+        distanceOp = '<->';
+        break;
+      case 'ip':
+      case 'inner_product':
+        distanceOp = '<#>';
+        break;
+      default:
+        throw new Error(
+          `Unsupported metric: ${metric}. Supported: cosine, euclidean/l2, ip/inner_product`,
+        );
+    }
+
     const results = await this.prisma.$queryRaw<
-      { title: string; link: string; min_distance: number }[]
+      { title: string; link: string; distance: number }[]
     >`
-        SELECT 
-            d.title,
-            d.link,
-            MIN(e.vector <=> ${querySql}::vector(768)) AS min_distance 
-        FROM "Embedding" e
-        INNER JOIN "Document" d ON e.documentId = d.id
-        GROUP BY d.id, d.title, d.link
-        ORDER BY min_distance ASC
-        LIMIT ${limit}
+      SELECT 
+        d.title,
+        d.link,
+        e.vector ${distanceOp} ${querySql}::vector(768) AS distance
+      FROM "Embedding" e
+      INNER JOIN "Document" d ON e.documentId = d.id
+      WHERE e.modelId = ${modelId}
+      ORDER BY distance ASC
+      LIMIT ${limit}
     `;
 
     return results.map((row) => ({
       title: row.title,
       link: row.link,
-      distance: row.min_distance,
+      distance: row.distance,
     }));
+  }
+
+  async getModelId(nameInOllama: string): Promise<string> {
+    let model = await this.prisma.model.findUnique({
+      where: { nameInOllama },
+    });
+
+    if (!model) {
+      model = await this.prisma.model.create({
+        data: { nameInOllama },
+      });
+    }
+
+    return model.id;
   }
 }
