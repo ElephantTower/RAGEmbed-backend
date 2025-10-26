@@ -1,28 +1,9 @@
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    ports:
-      - "${APP_PORT}:3000"
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-    volumes:
-      - .:/app
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-      # ollama:
-      #   condition: service_healthy
-    restart: always
-
   postgres:
     image: ankane/pgvector:latest
     container_name: postgres_vector
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
