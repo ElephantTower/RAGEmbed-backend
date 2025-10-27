@@ -146,7 +146,7 @@ export class ParserService {
 
   async collectEmbeddings(
     delayMs: number = 1000,
-    chunkSize: number = 1500,
+    chunkSize: number = 1000,
     chunkOverlap: number = 300,
     batchSize: number = 16,
     limit: number = 5,

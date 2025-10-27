@@ -15,7 +15,7 @@ export class ParserController {
   ): Promise<{ message: string; result?: any }> {
     const {
       delayMs = 1000,
-      chunkSize = 1500,
+      chunkSize = 1000,
       chunkOverlap = 300,
       batchSize = 16,
       limit = 5,
