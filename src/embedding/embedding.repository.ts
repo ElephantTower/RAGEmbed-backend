@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { fromSql, toSql } from 'pgvector/utils';
 import { Embedding as PrismaEmbedding, Document } from '@prisma/client';
+import { createId } from '@paralleldrive/cuid2';
 
 type Embedding = PrismaEmbedding & {
   vector: number[];
@@ -25,25 +26,44 @@ export class EmbeddingRepository {
   async saveEmbedding(
     documentId: string,
     modelId: string,
+    chunkIdx: number,
     vector: number[],
   ): Promise<Embedding> {
-    const vectorSql = toSql(vector);
+    const MAX_RETRIES = 3;
+    let attempt = 0;
+    let lastError: Error | null = null;
 
-    const result = await this.prisma.$queryRaw<RawEmbedding[]>`
-      INSERT INTO "Embedding" ("documentId", "modelId", vector, "updatedAt")
-      VALUES (${documentId}, ${modelId}, ${vectorSql}::vector(768), NOW())
-      ON CONFLICT ("documentId", "modelId")
-      DO UPDATE SET 
-        vector = ${vectorSql}::vector(768),
-        "updatedAt" = NOW()
-      RETURNING *
-    `;
+    while (attempt < MAX_RETRIES) {
+      const id = createId();
+      const vectorSql = toSql(vector);
 
-    if (!result[0]) {
-      throw new Error('Failed to save or update embedding');
+      try {
+        const result = await this.prisma.$queryRaw<RawEmbedding[]>`
+        INSERT INTO "Embedding" ("id", "documentId", "modelId", "chunkIdx", "vector", "updatedAt")
+        VALUES (${id}, ${documentId}, ${modelId}, ${chunkIdx}, ${vectorSql}::vector(768), NOW())
+        ON CONFLICT ("documentId", "modelId", "chunkIdx")
+        DO UPDATE SET 
+          vector = ${vectorSql}::vector(768),
+          "updatedAt" = NOW()
+        RETURNING *
+      `;
+
+        if (result[0]) {
+          return toEmbedding(result[0]);
+        }
+        throw new Error('Failed to save or update embedding');
+      } catch (error: any) {
+        attempt++;
+        lastError = error;
+        console.warn(
+          `Collision detected (or just an error) on ID ${id}, retrying... (attempt ${attempt}/${MAX_RETRIES})`,
+        );
+        continue;
+      }
     }
-
-    return toEmbedding(result[0]);
+    throw new Error(
+      `Failed to save embedding after ${MAX_RETRIES} retries due to: ${lastError?.message}`,
+    );
   }
 
   async getEmbeddingByDocument(documentId: string): Promise<Embedding | null> {

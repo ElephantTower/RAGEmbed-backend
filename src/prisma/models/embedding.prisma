@@ -3,6 +3,7 @@ model Embedding {
 
   documentId String
   modelId    String
+  chunkIdx   Int
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   model    Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
@@ -12,5 +13,5 @@ model Embedding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([documentId, modelId])
+  @@unique([documentId, modelId, chunkIdx])
 }

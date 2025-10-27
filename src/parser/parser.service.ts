@@ -153,11 +153,18 @@ export class ParserService {
   ) {
     const documents = await this.parseTitles();
 
-    const processedDocuments: { title: string; href: string; documentId: string }[] = [];
+    const processedDocuments: {
+      title: string;
+      href: string;
+      documentId: string;
+    }[] = [];
     for (const doc of documents) {
       const fullLink = `${this.baseUrl}${doc.href}`;
       try {
-        const dbDoc = await this.documentsRepository.upsertDocument(doc.title, fullLink);
+        const dbDoc = await this.documentsRepository.upsertDocument(
+          doc.title,
+          fullLink,
+        );
         processedDocuments.push({ ...doc, documentId: dbDoc.id });
       } catch (error) {
         this.logger.error(`Failed to upsert document ${doc.title}:`, error);
@@ -212,18 +219,26 @@ export class ParserService {
             );
             continue;
           }
-          
-          for (let bacthChunkInd = 0; bacthChunkInd < batchChunks.length; bacthChunkInd += 1){
-            try{
+
+          for (
+            let bacthChunkInd = 0;
+            bacthChunkInd < batchChunks.length;
+            bacthChunkInd += 1
+          ) {
+            try {
               await this.embeddingRepository.saveEmbedding(
-                batchChunks[bacthChunkInd].documentId, 
-                modelId, 
-                batchEmbeddings[bacthChunkInd]
+                batchChunks[bacthChunkInd].documentId,
+                modelId,
+                batchChunks[bacthChunkInd].chunkId,
+                batchEmbeddings[bacthChunkInd],
               );
-            } catch (error){
-              this.logger.error(`Failed to save embedding for batch ${i / batchSize}, index ${bacthChunkInd}, with ${model}:`, error);
+            } catch (error) {
+              this.logger.error(
+                `Failed to save embedding for batch ${i / batchSize}, index ${bacthChunkInd}, with ${model}:`,
+                error,
+              );
             }
-          }          
+          }
         } catch (error) {
           this.logger.error(
             `Error processing batch ${i / batchSize}, model ${model}:`,
@@ -233,7 +248,13 @@ export class ParserService {
       }
     }
 
-    this.logger.log(`Collection completed. Processed ${processedCount} documents.`);
-    return { success: true, processed: processedCount, total: limitedDocuments.length };
+    this.logger.log(
+      `Collection completed. Processed ${processedCount} documents.`,
+    );
+    return {
+      success: true,
+      processed: processedCount,
+      total: limitedDocuments.length,
+    };
   }
 }

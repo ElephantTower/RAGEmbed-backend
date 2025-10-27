@@ -17,6 +17,7 @@ CREATE TABLE "Embedding" (
     "id" TEXT NOT NULL,
     "documentId" TEXT NOT NULL,
     "modelId" TEXT NOT NULL,
+    "chunkIdx" INTEGER NOT NULL,
     "vector" vector(768) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -38,7 +39,7 @@ CREATE TABLE "Model" (
 CREATE UNIQUE INDEX "Document_link_key" ON "Document"("link");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Embedding_documentId_modelId_key" ON "Embedding"("documentId", "modelId");
+CREATE UNIQUE INDEX "Embedding_documentId_modelId_chunkIdx_key" ON "Embedding"("documentId", "modelId", "chunkIdx");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Model_nameInOllama_key" ON "Model"("nameInOllama");
