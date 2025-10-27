@@ -18,13 +18,16 @@ export class RAGService {
     length: number = 5,
   ): Promise<{ title: string; link: string; distance: number }[]> {
     try {
-      const queryVector = await this.ollamaService.generateEmbeddings([input], model_name);
+      const queryVector = await this.ollamaService.generateEmbeddings(
+        [input],
+        model_name,
+      );
       this.logger.log(
         `Generated embedding for query: ${input.substring(0, 50)}... with model ${model_name}`,
       );
 
       const modelId = await this.embeddingRepository.getModelId(model_name);
-      this.logger.log(`Using model ID: ${modelId}`);
+      this.logger.log(`Using model: ${model_name}`);
 
       const results = await this.embeddingRepository.findSimilar(
         queryVector[0],
