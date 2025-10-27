@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Logger } from '@nestjs/common';
 import { ParserService } from './parser.service';
 import { ParseDocsDto } from './dtos/parseDocs.dto';
 import { AdminSecretGuard } from './admin-secret.guard';
@@ -6,6 +6,7 @@ import { AdminSecretGuard } from './admin-secret.guard';
 @Controller('admin')
 @UseGuards(AdminSecretGuard)
 export class ParserController {
+  private readonly logger = new Logger(ParserService.name);
   constructor(private readonly parserService: ParserService) {}
 
   @Post('parse-docs')
@@ -20,7 +21,7 @@ export class ParserController {
       limit = 5,
     } = dto;
 
-    console.log(
+    this.logger.log(
       `Starting document parsing with options: delayMs=${delayMs}, chunkSize=${chunkSize}, chunkOverlap=${chunkOverlap}, batchSize=${batchSize}, limit=${limit}`,
     );
 
@@ -32,10 +33,10 @@ export class ParserController {
         batchSize,
         limit,
       );
-      console.log('Parsing completed:', JSON.stringify(result, null, 2));
+      this.logger.log('Parsing completed:', JSON.stringify(result, null, 2));
       return { message: 'Parsing completed successfully', result };
     } catch (error) {
-      console.error('Error during parsing:', error);
+      this.logger.error('Error during parsing:', error);
       throw error;
     }
   }
