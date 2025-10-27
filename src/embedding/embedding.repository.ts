@@ -113,20 +113,24 @@ export class EmbeddingRepository {
         );
     }
 
-    const results = await this.prisma.$queryRaw<
+    const results = await this.prisma.$queryRawUnsafe<
       { title: string; link: string; distance: number }[]
-    >`
+    >(
+      `
       SELECT 
         d."title",
         d."link",
         MIN(e."vector" ${distanceOp} '${querySql}'::vector(768)) AS "distance"
       FROM "Embedding" e
       INNER JOIN "Document" d ON e."documentId" = d."id"
-      WHERE e."modelId" = ${modelId}
+      WHERE e."modelId" = $1
       GROUP BY d."id", d."title", d."link"
       ORDER BY "distance" ASC
-      LIMIT ${limit}
-    `;
+      LIMIT $2
+    `,
+      modelId,
+      limit,
+    );
 
     return results.map((row) => ({
       title: row.title,
