@@ -45,7 +45,13 @@ export class EmbeddingRepository {
         DO UPDATE SET 
           vector = ${vectorSql}::vector(768),
           "updatedAt" = NOW()
-        RETURNING *
+        RETURNING 
+        "id", 
+        "documentId", 
+        "modelId", 
+        "chunkIdx", 
+        vector::text AS "vector",
+        "updatedAt"
       `;
 
         if (result[0]) {
