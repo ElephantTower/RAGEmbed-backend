@@ -111,13 +111,14 @@ export class EmbeddingRepository {
       { title: string; link: string; distance: number }[]
     >`
       SELECT 
-        d.title,
-        d.link,
-        e.vector ${distanceOp} ${querySql}::vector(768) AS distance
+        d."title",
+        d."link",
+        MIN(e."vector" ${distanceOp} '${querySql}'::vector(768)) AS "distance"
       FROM "Embedding" e
-      INNER JOIN "Document" d ON e.documentId = d.id
-      WHERE e.modelId = ${modelId}
-      ORDER BY distance ASC
+      INNER JOIN "Document" d ON e."documentId" = d."id"
+      WHERE e."modelId" = ${modelId}
+      GROUP BY d."id", d."title", d."link"
+      ORDER BY "distance" ASC
       LIMIT ${limit}
     `;
 
