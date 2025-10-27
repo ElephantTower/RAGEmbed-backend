@@ -30,10 +30,12 @@ export class EmbeddingRepository {
     const vectorSql = toSql(vector);
 
     const result = await this.prisma.$queryRaw<RawEmbedding[]>`
-      INSERT INTO "Embedding" (documentId, modelId, vector)
-      VALUES (${documentId}, ${modelId}, ${vectorSql}::vector(768))
-      ON CONFLICT (documentId, modelId)
-      DO UPDATE SET vector = ${vectorSql}::vector(768)
+      INSERT INTO "Embedding" ("documentId", "modelId", vector, "updatedAt")
+      VALUES (${documentId}, ${modelId}, ${vectorSql}::vector(768), NOW())
+      ON CONFLICT ("documentId", "modelId")
+      DO UPDATE SET 
+        vector = ${vectorSql}::vector(768),
+        "updatedAt" = NOW()
       RETURNING *
     `;
 
