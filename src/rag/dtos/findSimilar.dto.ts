@@ -13,9 +13,8 @@ const FindSimilarSchema = z.object({
   input: z.string().min(1, 'Input must not be empty'),
   model_name: z.string().min(1, 'Model_name must not be empty'),
   metric: MetricSchema,
-  length: z
-    .string()
-    .transform((val) => parseInt(val, 10))
+  length: z.coerce
+    .number()
     .optional()
     .default(5)
     .refine((val) => val > 0 && val <= 50, {
