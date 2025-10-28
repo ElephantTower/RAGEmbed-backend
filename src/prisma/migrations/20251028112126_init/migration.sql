@@ -29,6 +29,8 @@ CREATE TABLE "Embedding" (
 CREATE TABLE "Model" (
     "id" TEXT NOT NULL,
     "nameInOllama" TEXT NOT NULL,
+    "queryPrefix" TEXT NOT NULL DEFAULT '',
+    "documentPrefix" TEXT NOT NULL DEFAULT '',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

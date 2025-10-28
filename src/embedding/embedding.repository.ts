@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { fromSql, toSql } from 'pgvector/utils';
-import { Embedding as PrismaEmbedding, Document } from '@prisma/client';
+import { Embedding as PrismaEmbedding, Document, Model } from '@prisma/client';
 import { createId } from '@paralleldrive/cuid2';
 
 type Embedding = PrismaEmbedding & {
@@ -139,17 +139,16 @@ export class EmbeddingRepository {
     }));
   }
 
-  async getModelId(nameInOllama: string): Promise<string> {
+  async getModel(nameInOllama: string): Promise<Model | null> {
     let model = await this.prisma.model.findUnique({
       where: { nameInOllama },
     });
 
-    if (!model) {
-      model = await this.prisma.model.create({
-        data: { nameInOllama },
-      });
-    }
+    return model;
+  }
 
-    return model.id;
+  async getAllModels(): Promise<Model[]> {
+    let models = await this.prisma.model.findMany();
+    return models;
   }
 }

@@ -1,6 +1,8 @@
 model Model {
   id         String @id @default(cuid())
   nameInOllama String @unique
+  queryPrefix      String @default("")
+  documentPrefix   String @default("")
 
   embeddings Embedding[]
 

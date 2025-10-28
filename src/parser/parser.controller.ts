@@ -19,6 +19,7 @@ export class ParserController {
       chunkOverlap = 300,
       batchSize = 16,
       limit = 5,
+      modelNames = []
     } = dto;
 
     this.logger.log(
@@ -26,15 +27,15 @@ export class ParserController {
     );
 
     try {
-      const result = await this.parserService.collectEmbeddings(
+      this.parserService.collectEmbeddings(
         delayMs,
         chunkSize,
         chunkOverlap,
         batchSize,
         limit,
+        modelNames
       );
-      this.logger.log('Parsing completed:', JSON.stringify(result, null, 2));
-      return { message: 'Parsing completed successfully', result };
+      return { message: 'Parsing started' };
     } catch (error) {
       this.logger.error('Error during parsing:', error);
       throw error;

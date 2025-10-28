@@ -27,7 +27,6 @@ export class ParserService {
   private readonly logger = new Logger(ParserService.name);
   private readonly baseUrl: string;
   private readonly contentsUrl: string;
-  private readonly models: string[];
 
   constructor(
     private configService: ConfigService,
@@ -44,7 +43,6 @@ export class ParserService {
       'DOCS_CONTENT_URL',
       'https://pascalabc.net/downloads/pabcnethelp/webhelpcontents.htm',
     );
-    this.models = this.configService.get('MODEL_NAMES').split(' ');
   }
 
   async parseTitles(): Promise<{ title: string; href: string }[]> {
@@ -150,6 +148,7 @@ export class ParserService {
     chunkOverlap: number = 300,
     batchSize: number = 16,
     limit: number = 5,
+    modelNames: string[] = []
   ) {
     const documents = await this.parseTitles();
 
@@ -200,22 +199,26 @@ export class ParserService {
       await delay(delayMs);
     }
 
-    for (const model of this.models) {
-      this.logger.log(`  Model: ${model}`);
-      const modelId = await this.embeddingRepository.getModelId(model);
+    const models = await this.embeddingRepository.getAllModels();
+    for (const model of models) {
+      if (modelNames.length > 0 && !modelNames.includes(model.nameInOllama)) {
+        continue;
+      }
+
+      this.logger.log(`  Model: ${model.nameInOllama}`);
       for (let i = 0; i < allChunks.length; i += batchSize) {
         const batchChunks = allChunks.slice(i, i + batchSize);
-        const input = batchChunks.map((chunk) => chunk.text);
-        this.logger.log(`Processing batch ${i / batchSize} for model ${model}`);
+        const input = batchChunks.map((chunk) => model.documentPrefix + ' ' + chunk.text);
+        this.logger.log(`Processing batch ${i / batchSize} for model ${model.nameInOllama}`);
         try {
           const batchEmbeddings = await this.ollamaService.generateEmbeddings(
             input,
-            model,
+            model.nameInOllama,
           );
 
           if (batchEmbeddings.length !== input.length) {
             this.logger.error(
-              `Mismatch in batch size for document ${document.title}, model ${model}, expected ${input.length}, got ${batchEmbeddings.length}`,
+              `Mismatch in batch size for document ${document.title}, model ${model.nameInOllama}, expected ${input.length}, got ${batchEmbeddings.length}`,
             );
             continue;
           }
@@ -228,20 +231,20 @@ export class ParserService {
             try {
               await this.embeddingRepository.saveEmbedding(
                 batchChunks[bacthChunkInd].documentId,
-                modelId,
+                model.id,
                 batchChunks[bacthChunkInd].chunkId,
                 batchEmbeddings[bacthChunkInd],
               );
             } catch (error) {
               this.logger.error(
-                `Failed to save embedding for batch ${i / batchSize}, index ${bacthChunkInd}, with ${model}:`,
+                `Failed to save embedding for batch ${i / batchSize}, index ${bacthChunkInd}, with ${model.nameInOllama}:`,
                 error,
               );
             }
           }
         } catch (error) {
           this.logger.error(
-            `Error processing batch ${i / batchSize}, model ${model}:`,
+            `Error processing batch ${i / batchSize}, model ${model.nameInOllama}:`,
             error,
           );
         }

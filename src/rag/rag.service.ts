@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { OllamaService } from '../embedding/ollama.service';
 import { EmbeddingRepository } from '../embedding/embedding.repository';
 
@@ -18,20 +18,24 @@ export class RAGService {
     length: number = 5,
   ): Promise<{ title: string; link: string; distance: number }[]> {
     try {
+      const model = await this.embeddingRepository.getModel(model_name);
+      if (!model){
+        throw new NotFoundException(`There is no model named ${model_name}`);
+      }
+
       const queryVector = await this.ollamaService.generateEmbeddings(
-        [input],
+        [model.queryPrefix + ' ' + input],
         model_name,
       );
       this.logger.log(
         `Generated embedding for query: ${input.substring(0, 50)}... with model ${model_name}`,
       );
 
-      const modelId = await this.embeddingRepository.getModelId(model_name);
       this.logger.log(`Using model: ${model_name}`);
 
       const results = await this.embeddingRepository.findSimilar(
         queryVector[0],
-        modelId,
+        model.id,
         metric,
         length,
       );

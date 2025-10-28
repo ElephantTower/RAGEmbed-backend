@@ -39,9 +39,19 @@ const ParseDocsSchema = z.object({
     .transform((val) => parseInt(val, 10))
     .optional()
     .default(5)
-    .refine((val) => val > 0 && val <= 100, {
+    .refine((val) => val > 0 && val <= 1000, {
       message: 'Limit must be between 1 and 100',
     }),
+  modelNames: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1, { message: 'Model name cannot be empty' })
+        .max(200, { message: 'Model name must be ≤ 200 characters' }),
+    )
+    .optional()
+    .default([]),
 });
 
 export class ParseDocsDto extends createZodDto(ParseDocsSchema) {}
