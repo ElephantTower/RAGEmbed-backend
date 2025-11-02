@@ -28,6 +28,9 @@ export class EmbeddingRepository {
     modelId: string,
     chunkIdx: number,
     vector: number[],
+    text: string,
+    translatedText: string,
+    summary?: string,
   ): Promise<Embedding> {
     const MAX_RETRIES = 3;
     let attempt = 0;
@@ -38,21 +41,27 @@ export class EmbeddingRepository {
       const vectorSql = toSql(vector);
 
       try {
-        const result = await this.prisma.$queryRaw<RawEmbedding[]>`
-        INSERT INTO "Embedding" ("id", "documentId", "modelId", "chunkIdx", "vector", "updatedAt")
-        VALUES (${id}, ${documentId}, ${modelId}, ${chunkIdx}, ${vectorSql}::vector(768), NOW())
-        ON CONFLICT ("documentId", "modelId", "chunkIdx")
-        DO UPDATE SET 
-          vector = ${vectorSql}::vector(768),
-          "updatedAt" = NOW()
-        RETURNING 
-        "id", 
-        "documentId", 
-        "modelId", 
-        "chunkIdx", 
-        vector::text AS "vector",
-        "updatedAt"
-      `;
+        const result = await this.prisma.$queryRaw<RawEmbedding[]>`  
+          INSERT INTO "Embedding" ("id", "documentId", "modelId", "chunkIdx", "text", "translatedText", "summary", "vector", "updatedAt")
+          VALUES (${id}, ${documentId}, ${modelId}, ${chunkIdx}, ${text}, ${translatedText}, ${summary || null}, ${vectorSql}::vector(768), NOW())
+          ON CONFLICT ("documentId", "modelId", "chunkIdx")
+          DO UPDATE SET 
+            text = EXCLUDED."text",
+            translatedText = EXCLUDED."translatedText",
+            summary = EXCLUDED."summary",
+            vector = ${vectorSql}::vector(768),
+            "updatedAt" = NOW()
+          RETURNING 
+          "id", 
+          "documentId", 
+          "modelId", 
+          "chunkIdx", 
+          "text",
+          "translatedText",
+          "summary",
+          vector::text AS "vector",
+          "updatedAt"
+        `;
 
         if (result[0]) {
           return toEmbedding(result[0]);
@@ -135,6 +144,58 @@ export class EmbeddingRepository {
     return results.map((row) => ({
       title: row.title,
       link: row.link,
+      distance: row.distance,
+    }));
+  }
+
+  async findNearestEmbeddings(
+    queryVector: number[],
+    modelId: string,
+    metric: string,
+    limit: number = 5,
+  ): Promise<{ title: string; text: string; distance: number }[]> {
+    const querySql = toSql(queryVector);
+
+    let distanceOp: string;
+    switch (metric.toLowerCase()) {
+      case 'cosine':
+        distanceOp = '<=>';
+        break;
+      case 'euclidean':
+      case 'l2':
+        distanceOp = '<->';
+        break;
+      case 'ip':
+      case 'inner_product':
+        distanceOp = '<#>';
+        break;
+      default:
+        throw new Error(
+          `Unsupported metric: ${metric}. Supported: cosine, euclidean/l2, ip/inner_product`,
+        );
+    }
+
+    const results = await this.prisma.$queryRawUnsafe<
+      { title: string; text: string; distance: number }[]
+    >(
+      `
+      SELECT 
+        d."title",
+        e."text",
+        e."vector" ${distanceOp} '${querySql}'::vector(768) AS "distance"
+      FROM "Embedding" e
+      INNER JOIN "Document" d ON e."documentId" = d."id"
+      WHERE e."modelId" = $1
+      ORDER BY "distance" ASC
+      LIMIT $2
+    `,
+      modelId,
+      limit,
+    );
+
+    return results.map((row) => ({
+      title: row.title,
+      text: row.text,
       distance: row.distance,
     }));
   }

@@ -1,7 +1,8 @@
 model Document {
-  id    String @id @default(cuid())
-  title String
-  link  String @unique
+  id              String  @id @default(cuid())
+  title           String
+  translatedTitle String?
+  link            String  @unique
 
   embeddings Embedding[]
 

@@ -18,12 +18,11 @@ export class ParserController {
       chunkSize = 1000,
       chunkOverlap = 300,
       batchSize = 16,
-      limit = 5,
       modelNames = []
     } = dto;
 
     this.logger.log(
-      `Starting document parsing with options: delayMs=${delayMs}, chunkSize=${chunkSize}, chunkOverlap=${chunkOverlap}, batchSize=${batchSize}, limit=${limit}`,
+      `Starting document parsing with options: delayMs=${delayMs}, chunkSize=${chunkSize}, chunkOverlap=${chunkOverlap}, batchSize=${batchSize}`,
     );
 
     try {
@@ -32,7 +31,6 @@ export class ParserController {
         chunkSize,
         chunkOverlap,
         batchSize,
-        limit,
         modelNames
       );
       return { message: 'Parsing started' };

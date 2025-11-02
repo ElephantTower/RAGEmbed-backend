@@ -19,4 +19,18 @@ export class RAGController {
 
     return results;
   }
+
+  @Post('giveAnswer')
+  async giveAnswer(@Body() dto: FindSimilarDto) {
+    const { input, model_name, metric, length } = dto;
+
+    const result = await this.ragService.giveAnswer(
+      input,
+      model_name,
+      metric,
+      length,
+    );
+
+    return result;
+  }
 }

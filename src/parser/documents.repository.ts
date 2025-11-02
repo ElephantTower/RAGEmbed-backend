@@ -14,6 +14,16 @@ export class DocumentsRepository {
     });
   }
 
+  async addTranslatedTitle(
+    documentId: string,
+    translatedTitle: string,
+  ): Promise<Document> {
+    return this.prisma.document.update({
+      where: { id: documentId },
+      data: { translatedTitle: translatedTitle },
+    });
+  }
+
   async findByLink(link: string): Promise<Document | null> {
     return this.prisma.document.findUnique({ where: { link } });
   }

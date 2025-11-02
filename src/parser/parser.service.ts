@@ -2,12 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { OllamaService } from 'src/embedding/ollama.service';
+import { OllamaService } from 'src/ollama/ollama.service';
 import { EmbeddingRepository } from 'src/embedding/embedding.repository';
 import { DocumentsRepository } from './documents.repository';
 import { JSDOM } from 'jsdom';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { delay } from 'src/utils/delay.util';
+import { Embedding, Document, Model } from '@prisma/client';
 
 interface Chunk {
   chunkId: number;
@@ -147,8 +148,7 @@ export class ParserService {
     chunkSize: number = 1000,
     chunkOverlap: number = 300,
     batchSize: number = 16,
-    limit: number = 5,
-    modelNames: string[] = []
+    modelNames: string[] = [],
   ) {
     const documents = await this.parseTitles();
 
@@ -169,95 +169,217 @@ export class ParserService {
         this.logger.error(`Failed to upsert document ${doc.title}:`, error);
       }
     }
-
-    const limitedDocuments = processedDocuments.slice(0, limit);
-    let processedCount = 0;
-
-    const allChunks: Chunk[] = [];
-    for (const document of limitedDocuments) {
-      this.logger.log(`Processing document: ${document.title}`);
-      const text = await this.getTextFromDocument(document.href);
-      if (!text.trim()) {
-        this.logger.warn(`No text extracted for document: ${document.title}`);
-        continue;
-      }
-
-      const chunks = await this.chunkDocument(
-        text,
-        document.documentId,
-        chunkSize,
-        chunkOverlap,
+    const documentPromises: Promise<any>[] = [];
+    for (const document of processedDocuments) {
+      documentPromises.push(
+        this.processDocument(
+          document,
+          chunkSize,
+          chunkOverlap,
+          batchSize,
+          modelNames,
+        ),
       );
-
-      if (chunks.length === 0) {
-        this.logger.warn(`No chunks created for document: ${document.title}`);
-        continue;
-      }
-
-      processedCount += 1;
-      allChunks.push(...chunks);
       await delay(delayMs);
     }
+    await Promise.all(documentPromises);
 
+    this.logger.log(
+      `Collection completed. Processed ${processedDocuments.length} documents.`,
+    );
+    return {
+      success: true,
+      total: processedDocuments.length,
+    };
+  }
+
+  async processDocument(
+    document: {
+      title: string;
+      href: string;
+      documentId: string;
+    },
+    chunkSize: number,
+    chunkOverlap: number,
+    batchSize: number,
+    modelNames: string[],
+  ): Promise<any> {
+    const text = await this.getTextFromDocument(document.href);
+    if (!text.trim()) {
+      this.logger.warn(
+        `Document ${document.documentId}: No text extracted for document`,
+      );
+      return;
+    }
+
+    const translatedTitle =
+      await this.ollamaService.translateFromRussianToEnglish(document.title);
+    await this.documentsRepository.addTranslatedTitle(
+      document.documentId,
+      translatedTitle,
+    );
+
+    const chunks = await this.chunkDocument(
+      text,
+      document.documentId,
+      chunkSize,
+      chunkOverlap,
+    );
+    if (chunks.length === 0) {
+      this.logger.warn(
+        `Document ${document.documentId}: No chunks created for document`,
+      );
+      return;
+    }
     const models = await this.embeddingRepository.getAllModels();
+    const tasks = this.createProcessingTasks(
+      document,
+      translatedTitle,
+      chunks,
+      models,
+      modelNames,
+      batchSize,
+    );
+
+    await Promise.all(tasks);
+  }
+
+  private createProcessingTasks(
+    document: { documentId: string },
+    translatedTitle: string,
+    chunks: Chunk[],
+    models: Model[],
+    modelNames: string[],
+    batchSize: number,
+  ): Promise<void>[] {
+    const tasks: Promise<void>[] = [];
+
     for (const model of models) {
       if (modelNames.length > 0 && !modelNames.includes(model.nameInOllama)) {
         continue;
       }
 
-      this.logger.log(`  Model: ${model.nameInOllama}`);
-      for (let i = 0; i < allChunks.length; i += batchSize) {
-        const batchChunks = allChunks.slice(i, i + batchSize);
-        const input = batchChunks.map((chunk) => model.documentPrefix + ' ' + chunk.text);
-        this.logger.log(`Processing batch ${i / batchSize} for model ${model.nameInOllama}`);
-        try {
-          const batchEmbeddings = await this.ollamaService.generateEmbeddings(
-            input,
-            model.nameInOllama,
-          );
-
-          if (batchEmbeddings.length !== input.length) {
-            this.logger.error(
-              `Mismatch in batch size for document ${document.title}, model ${model.nameInOllama}, expected ${input.length}, got ${batchEmbeddings.length}`,
-            );
-            continue;
-          }
-
-          for (
-            let bacthChunkInd = 0;
-            bacthChunkInd < batchChunks.length;
-            bacthChunkInd += 1
-          ) {
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batchChunks = chunks.slice(i, i + batchSize);
+        tasks.push(
+          (async (
+            modelForBatch: Model,
+            batchStart: number,
+            batchChunksForBatch: Chunk[],
+          ) => {
             try {
-              await this.embeddingRepository.saveEmbedding(
-                batchChunks[bacthChunkInd].documentId,
-                model.id,
-                batchChunks[bacthChunkInd].chunkId,
-                batchEmbeddings[bacthChunkInd],
+              this.logger.log(
+                `Document ${document.documentId}: Model ${modelForBatch.nameInOllama}: Processing batch ${batchStart / batchSize}`,
+              );
+
+              const processedChunks = await this.processBatchChunks(
+                document.documentId,
+                translatedTitle,
+                modelForBatch,
+                batchStart / batchSize,
+                batchChunksForBatch,
+              );
+
+              const successful = processedChunks.filter((p) => p !== null);
+              if (successful.length === 0) {
+                return;
+              }
+
+              await this.generateAndSaveEmbeddingsForBatch(
+                document.documentId,
+                modelForBatch,
+                batchStart / batchSize,
+                successful,
               );
             } catch (error) {
               this.logger.error(
-                `Failed to save embedding for batch ${i / batchSize}, index ${bacthChunkInd}, with ${model.nameInOllama}:`,
+                `${document.documentId}: Model ${modelForBatch.nameInOllama}: Error processing batch ${batchStart / batchSize}`,
                 error,
               );
             }
-          }
-        } catch (error) {
-          this.logger.error(
-            `Error processing batch ${i / batchSize}, model ${model.nameInOllama}:`,
-            error,
-          );
-        }
+          })(model, i, batchChunks),
+        );
       }
     }
 
-    this.logger.log(
-      `Collection completed. Processed ${processedCount} documents.`,
+    return tasks;
+  }
+
+  private async processBatchChunks(
+    documentId: string,
+    translatedTitle: string,
+    model: Model,
+    batchIndex: number,
+    batchChunks: Chunk[],
+  ) {
+    return Promise.all(
+      batchChunks.map(async (chunk, batchChunkInd) => {
+        let translatedText: string;
+        let summary: string;
+        try {
+          translatedText =
+            await this.ollamaService.translateFromRussianToEnglish(chunk.text);
+          summary = await this.ollamaService.summarizeChunk(
+            translatedText,
+            translatedTitle,
+          );
+          return { chunk, translatedText, summary, batchChunkInd };
+        } catch (error) {
+          this.logger.error(
+            `Document ${documentId}: Model ${model.nameInOllama}: Batch ${batchIndex}: Failed to process chunk ${chunk.chunkId}, index ${batchChunkInd}`,
+            error,
+          );
+          return null;
+        }
+      }),
     );
-    return {
-      success: true,
-      processed: processedCount,
-      total: limitedDocuments.length,
-    };
+  }
+
+  private async generateAndSaveEmbeddingsForBatch(
+    documentId: string,
+    model: any,
+    batchIndex: number,
+    successfulProcessedChunks: {
+      chunk: Chunk;
+      translatedText: string;
+      summary: string;
+      batchChunkInd: number;
+    }[],
+  ): Promise<void> {
+    const inputs = successfulProcessedChunks.map(
+      (p) => model.documentPrefix + ' ' + p.summary,
+    );
+    const batchEmbeddings = await this.ollamaService.generateEmbeddings(
+      inputs,
+      model.nameInOllama,
+    );
+
+    if (batchEmbeddings.length !== inputs.length) {
+      this.logger.error(
+        `Document ${documentId}: Model ${model.nameInOllama}: Mismatch in batch size, expected ${inputs.length}, got ${batchEmbeddings.length}`,
+      );
+      return;
+    }
+
+    await Promise.all(
+      successfulProcessedChunks.map(async (p, successIdx) => {
+        try {
+          await this.embeddingRepository.saveEmbedding(
+            p.chunk.documentId,
+            model.id,
+            p.chunk.chunkId,
+            batchEmbeddings[successIdx],
+            p.chunk.text,
+            p.translatedText,
+            p.summary,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Document ${documentId}: Model ${model.nameInOllama}: Batch ${batchIndex}: Failed to save embedding for chunk ${p.chunk.chunkId}`,
+            error,
+          );
+        }
+      }),
+    );
   }
 }

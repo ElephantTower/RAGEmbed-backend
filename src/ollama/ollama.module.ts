@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { OllamaInitService } from './ollama-init.service';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
-import { EmbeddingModule } from 'src/embedding/embedding.module';
+import { OllamaService } from './ollama.service';
 
 @Module({
-  imports: [ConfigModule, HttpModule, EmbeddingModule],
-  providers: [OllamaInitService],
+  imports: [ConfigModule, HttpModule],
+  providers: [OllamaInitService, OllamaService],
+  exports: [OllamaService],
 })
-export class OllamaInitModule {}
+export class OllamaModule {}

@@ -30,13 +30,6 @@ const ParseDocsSchema = z.object({
     .refine((val) => val > 0 && val <= 64, {
       message: 'BatchSize must be between 1 and 64',
     }),
-  limit: z.coerce
-    .number()
-    .optional()
-    .default(5)
-    .refine((val) => val > 0 && val <= 1000, {
-      message: 'Limit must be between 1 and 100',
-    }),
   modelNames: z
     .array(
       z
