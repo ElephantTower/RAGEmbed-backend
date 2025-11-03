@@ -7,9 +7,16 @@ import { DocumentsRepository } from './documents.repository';
 import { ParserController } from './parser.controller';
 import { AdminSecretGuard } from './admin-secret.guard';
 import { OllamaModule } from 'src/ollama/ollama.module';
+import { EmbeddingModule } from 'src/embedding/embedding.module';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, HttpModule, OllamaModule],
+  imports: [
+    ConfigModule,
+    PrismaModule,
+    HttpModule,
+    OllamaModule,
+    EmbeddingModule,
+  ],
   providers: [ParserService, DocumentsRepository, AdminSecretGuard],
   controllers: [ParserController],
   exports: [ParserService],
