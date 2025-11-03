@@ -47,7 +47,7 @@ export class EmbeddingRepository {
           ON CONFLICT ("documentId", "modelId", "chunkIdx")
           DO UPDATE SET 
             text = EXCLUDED."text",
-            translatedText = EXCLUDED."translatedText",
+            "translatedText" = EXCLUDED."translatedText",
             summary = EXCLUDED."summary",
             vector = ${vectorSql}::vector(768),
             "updatedAt" = NOW()
