@@ -3,9 +3,10 @@ import { OllamaInitService } from './ollama-init.service';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
 import { OllamaService } from './ollama.service';
+import { EmbeddingModule } from 'src/embedding/embedding.module';
 
 @Module({
-  imports: [ConfigModule, HttpModule],
+  imports: [ConfigModule, HttpModule, EmbeddingModule],
   providers: [OllamaInitService, OllamaService],
   exports: [OllamaService],
 })
