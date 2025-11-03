@@ -55,3 +55,9 @@ ALTER TABLE "Embedding" ADD CONSTRAINT "Embedding_documentId_fkey" FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE "Embedding" ADD CONSTRAINT "Embedding_modelId_fkey" FOREIGN KEY ("modelId") REFERENCES "Model"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+INSERT INTO "Model" ("id", "nameInOllama", "queryPrefix", "documentPrefix", "updatedAt")
+VALUES ('cmhahr85n0000wfu8c5a3bvls', 'nomic-embed-text:v1.5', 'search_query:', 'search_document:', CURRENT_TIMESTAMP);
+
+INSERT INTO "Model" ("id", "nameInOllama", "queryPrefix", "documentPrefix", "updatedAt")
+VALUES ('cmhal8aye0001wfu8221fv91l', 'snowflake-arctic-embed:m', 'query:', '', CURRENT_TIMESTAMP);
