@@ -5,6 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 CREATE TABLE "Document" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
+    "translatedTitle" TEXT,
     "link" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -18,6 +19,9 @@ CREATE TABLE "Embedding" (
     "documentId" TEXT NOT NULL,
     "modelId" TEXT NOT NULL,
     "chunkIdx" INTEGER NOT NULL,
+    "text" TEXT NOT NULL,
+    "translatedText" TEXT NOT NULL,
+    "summary" TEXT NOT NULL,
     "vector" vector(768) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
