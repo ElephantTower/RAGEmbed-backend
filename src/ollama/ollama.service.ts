@@ -78,7 +78,7 @@ export class OllamaService {
 
       const translatedText = response.data.response.trim();
       this.logger.log(
-        `Translated text with ${this.translationModelName}: "${text}" -> "${translatedText}"`,
+        `Translated text with ${this.translationModelName}: "${text.substring(0, 50)}..." -> "${translatedText.substring(0, 50)}..."`,
       );
 
       return translatedText;
