@@ -42,7 +42,7 @@ export class OllamaService {
             model: modelName,
             input,
           },
-          { timeout: 30000 },
+          // { timeout: 30000 },
         ),
       );
       this.logger.log(
@@ -72,7 +72,7 @@ export class OllamaService {
             prompt,
             stream: false,
           },
-          { timeout: 60000 },
+          // { timeout: 60000 },
         ),
       );
 
@@ -108,7 +108,7 @@ export class OllamaService {
             prompt,
             stream: false,
           },
-          { timeout: 60000 },
+          // { timeout: 60000 },
         ),
       );
 
@@ -139,7 +139,7 @@ export class OllamaService {
             prompt,
             stream: false,
           },
-          { timeout: 60000 },
+          // { timeout: 60000 },
         ),
       );
 
