@@ -34,6 +34,9 @@ export class OllamaService {
     input: string[],
     modelName: string,
   ): Promise<number[][]> {
+    this.logger.log(
+      `Starting to generate embeddings for batch size ${input.length} with ${modelName}`,
+    );
     try {
       const response = await firstValueFrom(
         this.httpService.post(
@@ -61,6 +64,9 @@ export class OllamaService {
   }
 
   async translateFromRussianToEnglish(text: string): Promise<string> {
+    this.logger.log(
+      `Starting to translate from Russian to English: "${text.substring(0, 50)}..." with ${this.translationModelName}`,
+    );
     try {
       const prompt = `Translate from Russian to English: ${text}`;
 
@@ -94,6 +100,9 @@ export class OllamaService {
   }
 
   async summarizeChunk(chunk: string, documentTitle?: string): Promise<string> {
+    this.logger.log(
+      `Starting to summarize chunk of length ${chunk.length} with ${this.mainModelName}${documentTitle ? ` for document "${documentTitle}"` : ''}`,
+    );
     try {
       const titlePart = documentTitle
         ? `From document: "${documentTitle}"\n`
@@ -125,6 +134,9 @@ export class OllamaService {
   }
 
   async giveAnswer(query: string, chunks: string[]): Promise<string> {
+    this.logger.log(
+      `Starting to generate answer for query length ${query.length} with ${chunks.length} chunks using ${this.mainModelName}`,
+    );
     try {
       const context = chunks.join('\n\n');
       const prePrompt =
