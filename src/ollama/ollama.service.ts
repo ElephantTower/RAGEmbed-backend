@@ -62,7 +62,7 @@ export class OllamaService {
 
   async translateFromRussianToEnglish(text: string): Promise<string> {
     try {
-      const prompt = `<2ru>${text}</2ru><2en>`;
+      const prompt = `Translate from Russian to English: ${text}`;
 
       const response = await firstValueFrom(
         this.httpService.post(
