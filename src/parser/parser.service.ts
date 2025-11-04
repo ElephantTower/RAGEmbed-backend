@@ -171,7 +171,7 @@ export class ParserService {
     }
     const documentPromises: Promise<any>[] = [];
     for (const document of processedDocuments) {
-      documentPromises.push(
+      await documentPromises.push(
         this.processDocument(
           document,
           chunkSize,
@@ -180,9 +180,9 @@ export class ParserService {
           modelNames,
         ),
       );
-      await delay(delayMs);
+      // await delay(delayMs);
     }
-    await Promise.all(documentPromises);
+    // await Promise.all(documentPromises);
 
     this.logger.log(
       `Collection completed. Processed ${processedDocuments.length} documents.`,
