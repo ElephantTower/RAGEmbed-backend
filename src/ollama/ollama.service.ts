@@ -81,7 +81,14 @@ export class OllamaService {
       return text;
     }
 
-    const extractedJSON = text.slice(startIndex, endIndex + 1);
+    let extractedJSON = text.slice(startIndex, endIndex + 1);
+
+    extractedJSON = extractedJSON.replace(
+      /"([^"\\]|\\.)*?\n([^"\\]|\\.)*?"/g,
+      (match) => {
+        return match.replace(/\n/g, '\\n');
+      },
+    );
 
     try {
       const parsed = JSON.parse(extractedJSON);
