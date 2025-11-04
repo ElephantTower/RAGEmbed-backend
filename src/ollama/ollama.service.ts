@@ -78,17 +78,12 @@ export class OllamaService {
       this.logger.warn(
         `extractAnswerFromJSON: No valid JSON braces found in text: "${text.substring(0, 50)}..."`,
       );
-      return text;
+      return this.extractAnswerSimple(text);
     }
 
     let extractedJSON = text.slice(startIndex, endIndex + 1);
 
-    extractedJSON = extractedJSON.replace(
-      /"([^"\\]|\\.)*?\n([^"\\]|\\.)*?"/g,
-      (match) => {
-        return match.replace(/\n/g, '\\n');
-      },
-    );
+    extractedJSON = this.fixAIJSONIssues(extractedJSON);
 
     try {
       const parsed = JSON.parse(extractedJSON);
@@ -106,14 +101,49 @@ export class OllamaService {
         this.logger.warn(
           `extractAnswerFromJSON: Parsed JSON lacks valid 'answer' field: ${JSON.stringify(parsed).substring(0, 100)}...`,
         );
-        return text;
+        return this.extractAnswerSimple(text);
       }
-    } catch (parseError) {
+    } catch (parseError: any) {
       this.logger.error(
-        `extractAnswerFromJSON: Failed to parse extracted JSON "${extractedJSON.substring(0, 100)}...": ${parseError.message}`,
+        `extractAnswerFromJSON: Failed to parse fixed JSON "${extractedJSON.substring(0, 100)}...": ${parseError.message}`,
+      );
+      return this.extractAnswerSimple(text);
+    }
+  }
+
+  private fixAIJSONIssues(jsonStr: string): string {
+    jsonStr = jsonStr.replace(/\n/g, '\\n');
+
+    return jsonStr.replace(
+      /"((?:[^"\\]|\\.)*)"/g,
+      (match: string, content: string) => {
+        let escapedContent = content
+          .replace(/\\/g, '\\\\')
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n');
+
+        return '"' + escapedContent + '"';
+      },
+    );
+  }
+
+  private extractAnswerSimple(text: string): string {
+    const startMarker = '"answer": "';
+    const start = text.indexOf(startMarker);
+    if (start === -1) {
+      this.logger.warn(
+        `extractAnswerSimple: No "answer": marker found, returning original: "${text.substring(0, 50)}..."`,
       );
       return text;
     }
+
+    let valueStart = start + startMarker.length;
+    const endBrace = text.indexOf('}', valueStart);
+    let end = endBrace !== -1 ? endBrace : text.length;
+
+    let rawValue = text.substring(valueStart, end).replace(/[" \t\n\r]*$/g, '');
+
+    return rawValue;
   }
 
   async translateFromRussianToEnglish(text: string): Promise<string> {
@@ -162,7 +192,7 @@ export class OllamaService {
       const titlePart = documentTitle
         ? `From document: "${documentTitle}"\n`
         : '';
-      const prompt = `${titlePart}Summarize the following text chunk in English, keeping the main ideas concise (3-5 sentences): ${chunk}\nGive answer in JSON format {"answer": "[answer]"}`;
+      const prompt = `${titlePart}Summarize the following text chunk in English, keeping the main ideas concise (3-5 sentences).\nChunk: [${chunk}]\nGive answer in JSON format {"answer": "[answer]"}`;
 
       const response = await firstValueFrom(
         this.httpService.post(
