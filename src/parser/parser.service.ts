@@ -171,8 +171,8 @@ export class ParserService {
     }
     const documentPromises: Promise<any>[] = [];
     for (const document of processedDocuments) {
-      await documentPromises.push(
-        this.processDocument(
+      documentPromises.push(
+        await this.processDocument(
           document,
           chunkSize,
           chunkOverlap,
