@@ -142,7 +142,9 @@ export class OllamaService {
     let end = endBrace !== -1 ? endBrace : text.length;
 
     let rawValue = text.substring(valueStart, end).replace(/[" \t\n\r]*$/g, '');
-
+    this.logger.debug(
+      `extractAnswerSimple: Used simple extraction: "${rawValue.substring(0, 50)}..."`,
+    );
     return rawValue;
   }
 
