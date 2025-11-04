@@ -153,7 +153,7 @@ export class OllamaService {
       `Starting to translate from Russian to English: "${text.substring(0, 50)}..." with ${this.translationModelName}`,
     );
     try {
-      const prompt = `Translate from Russian to English: "${text}"\nGive answer in JSON format {"answer": "[answer]"}`;
+      const prompt = `Translate from Russian to English: "${text}"\nGive answer in JSON format in English {"answer": "YOUR_ANSWER"}`;
 
       const response = await firstValueFrom(
         this.httpService.post(
