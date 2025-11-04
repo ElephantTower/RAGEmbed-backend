@@ -63,12 +63,58 @@ export class OllamaService {
     }
   }
 
+  private extractAnswerFromJSON(text: string): string {
+    if (!text || typeof text !== 'string') {
+      this.logger.warn(
+        'extractAnswerFromJSON: Input text is empty or not a string, returning original.',
+      );
+      return text || '';
+    }
+
+    const startIndex = text.indexOf('{');
+    const endIndex = text.lastIndexOf('}');
+
+    if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
+      this.logger.warn(
+        `extractAnswerFromJSON: No valid JSON braces found in text: "${text.substring(0, 50)}..."`,
+      );
+      return text;
+    }
+
+    const extractedJSON = text.slice(startIndex, endIndex + 1);
+
+    try {
+      const parsed = JSON.parse(extractedJSON);
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'answer' in parsed &&
+        typeof parsed.answer === 'string'
+      ) {
+        this.logger.debug(
+          `extractAnswerFromJSON: Successfully extracted answer: "${parsed.answer.substring(0, 50)}..."`,
+        );
+        return parsed.answer;
+      } else {
+        this.logger.warn(
+          `extractAnswerFromJSON: Parsed JSON lacks valid 'answer' field: ${JSON.stringify(parsed).substring(0, 100)}...`,
+        );
+        return text;
+      }
+    } catch (parseError) {
+      this.logger.error(
+        `extractAnswerFromJSON: Failed to parse extracted JSON "${extractedJSON.substring(0, 100)}...": ${parseError.message}`,
+      );
+      return text;
+    }
+  }
+
   async translateFromRussianToEnglish(text: string): Promise<string> {
     this.logger.log(
       `Starting to translate from Russian to English: "${text.substring(0, 50)}..." with ${this.translationModelName}`,
     );
     try {
-      const prompt = `RETURN ONLY TRANSLATION Translate from Russian to English: ${text}`;
+      const prompt = `Translate from Russian to English: ${text}\nGive answer in JSON format {"answer": "[answer]"}`;
 
       const response = await firstValueFrom(
         this.httpService.post(
@@ -82,7 +128,9 @@ export class OllamaService {
         ),
       );
 
-      const translatedText = response.data.response.trim();
+      const rawResponse = response.data.response.trim();
+      const translatedText = this.extractAnswerFromJSON(rawResponse);
+
       this.logger.log(
         `Translated text with ${this.translationModelName}: "${text.substring(0, 50)}..." -> "${translatedText.substring(0, 50)}..."`,
       );
@@ -107,7 +155,7 @@ export class OllamaService {
       const titlePart = documentTitle
         ? `From document: "${documentTitle}"\n`
         : '';
-      const prompt = `${titlePart}Summarize the following text chunk in English, keeping the main ideas concise (3-5 sentences), RETURN ONLY SUMMARY: ${chunk}`;
+      const prompt = `${titlePart}Summarize the following text chunk in English, keeping the main ideas concise (3-5 sentences): ${chunk}\nGive answer in JSON format {"answer": "[answer]"}`;
 
       const response = await firstValueFrom(
         this.httpService.post(
@@ -121,7 +169,9 @@ export class OllamaService {
         ),
       );
 
-      const summary = response.data.response.trim();
+      const rawResponse = response.data.response.trim();
+      const summary = this.extractAnswerFromJSON(rawResponse);
+
       this.logger.log(
         `Summarized chunk with ${this.mainModelName}: length ${chunk.length} -> ${summary.length} chars`,
       );
