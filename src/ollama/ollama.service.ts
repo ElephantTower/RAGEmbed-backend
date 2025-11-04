@@ -112,7 +112,7 @@ export class OllamaService {
   }
 
   private fixAIJSONIssues(jsonStr: string): string {
-    jsonStr = jsonStr.replace(/\n/g, '\\n');
+    jsonStr = jsonStr.replace(/\n/g, ' ');
 
     return jsonStr.replace(
       /"((?:[^"\\]|\\.)*)"/g,
@@ -120,7 +120,7 @@ export class OllamaService {
         let escapedContent = content
           .replace(/\\/g, '\\\\')
           .replace(/"/g, '\\"')
-          .replace(/\n/g, '\\n');
+          .replace(/\n/g, ' ');
 
         return '"' + escapedContent + '"';
       },
