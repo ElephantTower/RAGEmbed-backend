@@ -70,6 +70,7 @@ export class OllamaService {
       );
       return text || '';
     }
+    text = text.replace(/\s+/g, ' ').trim();
 
     const startIndex = text.indexOf('{');
     const endIndex = text.lastIndexOf('}');
@@ -128,20 +129,21 @@ export class OllamaService {
   }
 
   private extractAnswerSimple(text: string): string {
-    const startMarker = '"answer": "';
-    const start = text.indexOf(startMarker);
-    if (start === -1) {
+    const markerRegex = /("answer":\s*"?)\s*"/g;
+    const match = markerRegex.exec(text);
+
+    if (!match) {
       this.logger.warn(
         `extractAnswerSimple: No "answer": marker found, returning original: "${text.substring(0, 50)}..."`,
       );
       return text;
     }
 
-    let valueStart = start + startMarker.length;
-    const endBrace = text.indexOf('}', valueStart);
+    const start = match.index + match[0].length;
+    const endBrace = text.indexOf('}', start);
     let end = endBrace !== -1 ? endBrace : text.length;
 
-    let rawValue = text.substring(valueStart, end).replace(/[" \t\n\r]*$/g, '');
+    let rawValue = text.substring(start, end).replace(/[" \t\n\r]*$/g, '');
     this.logger.debug(
       `extractAnswerSimple: Used simple extraction: "${rawValue.substring(0, 50)}..."`,
     );
