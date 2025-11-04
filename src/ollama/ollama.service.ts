@@ -68,7 +68,7 @@ export class OllamaService {
       `Starting to translate from Russian to English: "${text.substring(0, 50)}..." with ${this.translationModelName}`,
     );
     try {
-      const prompt = `Translate from Russian to English: ${text}`;
+      const prompt = `RETURN ONLY TRANSLATION Translate from Russian to English: ${text}`;
 
       const response = await firstValueFrom(
         this.httpService.post(
@@ -107,7 +107,7 @@ export class OllamaService {
       const titlePart = documentTitle
         ? `From document: "${documentTitle}"\n`
         : '';
-      const prompt = `${titlePart}Summarize the following text chunk in English, keeping the main ideas concise (3-5 sentences): ${chunk}`;
+      const prompt = `${titlePart}Summarize the following text chunk in English, keeping the main ideas concise (3-5 sentences), RETURN ONLY SUMMARY: ${chunk}`;
 
       const response = await firstValueFrom(
         this.httpService.post(
