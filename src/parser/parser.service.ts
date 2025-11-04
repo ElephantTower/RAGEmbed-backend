@@ -308,9 +308,10 @@ export class ParserService {
       let translatedText: string;
       let summary: string;
       try {
-        translatedText = await this.ollamaService.translateFromRussianToEnglish(
-          chunk.text,
-        );
+        // translatedText = await this.ollamaService.translateFromRussianToEnglish(
+        //   chunk.text,
+        // );
+        translatedText = chunk.text;
         summary = await this.ollamaService.summarizeChunk(
           translatedText,
           translatedTitle,
