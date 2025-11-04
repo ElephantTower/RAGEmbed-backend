@@ -192,7 +192,6 @@ export class ParserService {
       total: processedDocuments.length,
     };
   }
-
   async processDocument(
     document: {
       title: string;
@@ -232,7 +231,7 @@ export class ParserService {
       return;
     }
     const models = await this.embeddingRepository.getAllModels();
-    const tasks = this.createProcessingTasks(
+    await this.createProcessingTasks(
       document,
       translatedTitle,
       chunks,
@@ -240,20 +239,16 @@ export class ParserService {
       modelNames,
       batchSize,
     );
-
-    await Promise.all(tasks);
   }
 
-  private createProcessingTasks(
+  private async createProcessingTasks(
     document: { documentId: string },
     translatedTitle: string,
     chunks: Chunk[],
     models: Model[],
     modelNames: string[],
     batchSize: number,
-  ): Promise<void>[] {
-    const tasks: Promise<void>[] = [];
-
+  ): Promise<void> {
     for (const model of models) {
       if (modelNames.length > 0 && !modelNames.includes(model.nameInOllama)) {
         continue;
@@ -261,48 +256,38 @@ export class ParserService {
 
       for (let i = 0; i < chunks.length; i += batchSize) {
         const batchChunks = chunks.slice(i, i + batchSize);
-        tasks.push(
-          (async (
-            modelForBatch: Model,
-            batchStart: number,
-            batchChunksForBatch: Chunk[],
-          ) => {
-            try {
-              this.logger.log(
-                `Document ${document.documentId}: Model ${modelForBatch.nameInOllama}: Processing batch ${batchStart / batchSize}`,
-              );
+        try {
+          this.logger.log(
+            `Document ${document.documentId}: Model ${model.nameInOllama}: Processing batch ${i / batchSize}`,
+          );
 
-              const processedChunks = await this.processBatchChunks(
-                document.documentId,
-                translatedTitle,
-                modelForBatch,
-                batchStart / batchSize,
-                batchChunksForBatch,
-              );
+          const processedChunks = await this.processBatchChunks(
+            document.documentId,
+            translatedTitle,
+            model,
+            i / batchSize,
+            batchChunks,
+          );
 
-              const successful = processedChunks.filter((p) => p !== null);
-              if (successful.length === 0) {
-                return;
-              }
+          const successful = processedChunks.filter((p) => p !== null);
+          if (successful.length === 0) {
+            continue;
+          }
 
-              await this.generateAndSaveEmbeddingsForBatch(
-                document.documentId,
-                modelForBatch,
-                batchStart / batchSize,
-                successful,
-              );
-            } catch (error) {
-              this.logger.error(
-                `${document.documentId}: Model ${modelForBatch.nameInOllama}: Error processing batch ${batchStart / batchSize}`,
-                error,
-              );
-            }
-          })(model, i, batchChunks),
-        );
+          await this.generateAndSaveEmbeddingsForBatch(
+            document.documentId,
+            model,
+            i / batchSize,
+            successful,
+          );
+        } catch (error) {
+          this.logger.error(
+            `${document.documentId}: Model ${model.nameInOllama}: Error processing batch ${i / batchSize}`,
+            error,
+          );
+        }
       }
     }
-
-    return tasks;
   }
 
   private async processBatchChunks(
@@ -312,27 +297,35 @@ export class ParserService {
     batchIndex: number,
     batchChunks: Chunk[],
   ) {
-    return Promise.all(
-      batchChunks.map(async (chunk, batchChunkInd) => {
-        let translatedText: string;
-        let summary: string;
-        try {
-          translatedText =
-            await this.ollamaService.translateFromRussianToEnglish(chunk.text);
-          summary = await this.ollamaService.summarizeChunk(
-            translatedText,
-            translatedTitle,
-          );
-          return { chunk, translatedText, summary, batchChunkInd };
-        } catch (error) {
-          this.logger.error(
-            `Document ${documentId}: Model ${model.nameInOllama}: Batch ${batchIndex}: Failed to process chunk ${chunk.chunkId}, index ${batchChunkInd}`,
-            error,
-          );
-          return null;
-        }
-      }),
-    );
+    const processedChunks: ({
+      chunk: Chunk;
+      translatedText: string;
+      summary: string;
+      batchChunkInd: number;
+    } | null)[] = [];
+
+    for (const [batchChunkInd, chunk] of batchChunks.entries()) {
+      let translatedText: string;
+      let summary: string;
+      try {
+        translatedText = await this.ollamaService.translateFromRussianToEnglish(
+          chunk.text,
+        );
+        summary = await this.ollamaService.summarizeChunk(
+          translatedText,
+          translatedTitle,
+        );
+        processedChunks.push({ chunk, translatedText, summary, batchChunkInd });
+      } catch (error) {
+        this.logger.error(
+          `Document ${documentId}: Model ${model.nameInOllama}: Batch ${batchIndex}: Failed to process chunk ${chunk.chunkId}, index ${batchChunkInd}`,
+          error,
+        );
+        processedChunks.push(null);
+      }
+    }
+
+    return processedChunks;
   }
 
   private async generateAndSaveEmbeddingsForBatch(
@@ -361,25 +354,23 @@ export class ParserService {
       return;
     }
 
-    await Promise.all(
-      successfulProcessedChunks.map(async (p, successIdx) => {
-        try {
-          await this.embeddingRepository.saveEmbedding(
-            p.chunk.documentId,
-            model.id,
-            p.chunk.chunkId,
-            batchEmbeddings[successIdx],
-            p.chunk.text,
-            p.translatedText,
-            p.summary,
-          );
-        } catch (error) {
-          this.logger.error(
-            `Document ${documentId}: Model ${model.nameInOllama}: Batch ${batchIndex}: Failed to save embedding for chunk ${p.chunk.chunkId}`,
-            error,
-          );
-        }
-      }),
-    );
+    for (const [successIdx, p] of successfulProcessedChunks.entries()) {
+      try {
+        await this.embeddingRepository.saveEmbedding(
+          p.chunk.documentId,
+          model.id,
+          p.chunk.chunkId,
+          batchEmbeddings[successIdx],
+          p.chunk.text,
+          p.translatedText,
+          p.summary,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Document ${documentId}: Model ${model.nameInOllama}: Batch ${batchIndex}: Failed to save embedding for chunk ${p.chunk.chunkId}`,
+          error,
+        );
+      }
+    }
   }
 }
