@@ -48,21 +48,42 @@ services:
       retries: 5
     restart: always
 
-  ollama:
+  embeddings:
+    image: michaelf34/infinity:latest-cpu
+    container_name: embeddings
+    restart: unless-stopped
+    ports:
+      - "7997:7997"
+    environment:
+      - INFINITY_ENGINE=torch
+      - INFINITY_DEVICE=cpu
+    volumes:
+      - infinity_cache:/app/.cache
+    command: > 
+      v2 
+      --model-id ${EMBEDDER_MODEL}
+      --model-id ${RERANKER_MODEL}
+      --port 7997
+      --host 0.0.0.0
+      --log-level info
+      --no-model-warmup
+
+  llm:
     image: ollama/ollama:latest
-    container_name: ollama
+    container_name: llm
     ports:
       - "11434:11434"
+    environment:
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_KEEP_ALIVE=-1
+      - LLM_MODEL=${LLM_MODEL}
     volumes:
       - ollama_data:/root/.ollama
       - ./init-scripts/pull-llama-model.sh:/init-ollama.sh
-    environment:
-      - MODEL_NAMES=${MODEL_NAMES}
     entrypoint: /bin/sh
     command: /init-ollama.sh
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      # test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags | jq -e '.models[] | select(.name == \"${MODEL_NAME}\")' > /dev/null"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -73,3 +94,4 @@ volumes:
   dumps:
   postgres-data:
   ollama_data:
+  infinity_cache:

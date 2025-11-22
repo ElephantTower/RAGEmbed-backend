@@ -7,7 +7,6 @@ import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe, ZodSerializerInterceptor } from 'nestjs-zod';
 import { RAGModule } from './rag/rag.module';
 import { HttpExceptionFilter } from './http-exception.filter';
-import { OllamaInitModule } from './ollama-init/ollama-init.module';
 
 @Module({
   imports: [
@@ -19,7 +18,6 @@ import { OllamaInitModule } from './ollama-init/ollama-init.module';
     ParserModule,
     EmbeddingModule,
     RAGModule,
-    OllamaInitModule
   ],
   providers: [
     {

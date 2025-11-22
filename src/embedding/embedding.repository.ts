@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { fromSql, toSql } from 'pgvector/utils';
-import { Embedding as PrismaEmbedding, Document, Model } from '@prisma/client';
+import { Embedding as PrismaEmbedding, Document } from '@prisma/client';
 import { createId } from '@paralleldrive/cuid2';
 
 type Embedding = PrismaEmbedding & {
@@ -25,8 +25,10 @@ export class EmbeddingRepository {
 
   async saveEmbedding(
     documentId: string,
-    modelId: string,
+    text: string,
+    displayText: string,
     chunkIdx: number,
+    overlap: number,
     vector: number[],
   ): Promise<Embedding> {
     const MAX_RETRIES = 3;
@@ -39,16 +41,15 @@ export class EmbeddingRepository {
 
       try {
         const result = await this.prisma.$queryRaw<RawEmbedding[]>`
-        INSERT INTO "Embedding" ("id", "documentId", "modelId", "chunkIdx", "vector", "updatedAt")
-        VALUES (${id}, ${documentId}, ${modelId}, ${chunkIdx}, ${vectorSql}::vector(768), NOW())
-        ON CONFLICT ("documentId", "modelId", "chunkIdx")
+        INSERT INTO "Embedding" ("id", "documentId", "chunkText", "displayText", "chunkIdx", "overlap", "vector", "updatedAt")
+        VALUES (${id}, ${documentId}, ${text}, ${displayText}, ${chunkIdx}, ${overlap}, ${vectorSql}::vector(768), NOW())
+        ON CONFLICT ("documentId", "chunkIdx")
         DO UPDATE SET 
           vector = ${vectorSql}::vector(768),
           "updatedAt" = NOW()
         RETURNING 
         "id", 
         "documentId", 
-        "modelId", 
         "chunkIdx", 
         vector::text AS "vector",
         "updatedAt"
@@ -86,16 +87,9 @@ export class EmbeddingRepository {
     return toEmbedding(result[0]);
   }
 
-  async findSimilar(
-    queryVector: number[],
-    modelId: string,
-    metric: string,
-    limit: number = 5,
-  ): Promise<{ title: string; link: string; distance: number }[]> {
-    const querySql = toSql(queryVector);
-
+  getDistanceOp(metricName: string): string {
     let distanceOp: string;
-    switch (metric.toLowerCase()) {
+    switch (metricName.toLowerCase()) {
       case 'cosine':
         distanceOp = '<=>';
         break;
@@ -109,9 +103,20 @@ export class EmbeddingRepository {
         break;
       default:
         throw new Error(
-          `Unsupported metric: ${metric}. Supported: cosine, euclidean/l2, ip/inner_product`,
+          `Unsupported metric: ${metricName}. Supported: cosine, euclidean/l2, ip/inner_product`,
         );
     }
+    return distanceOp;
+  }
+
+  async findSimilarDocuments(
+    queryVector: number[],
+    metric: string,
+    limit: number = 5,
+  ): Promise<{ title: string; link: string; distance: number }[]> {
+    const querySql = toSql(queryVector);
+
+    const distanceOp = this.getDistanceOp(metric);
 
     const results = await this.prisma.$queryRawUnsafe<
       { title: string; link: string; distance: number }[]
@@ -123,12 +128,10 @@ export class EmbeddingRepository {
         MIN(e."vector" ${distanceOp} '${querySql}'::vector(768)) AS "distance"
       FROM "Embedding" e
       INNER JOIN "Document" d ON e."documentId" = d."id"
-      WHERE e."modelId" = $1
       GROUP BY d."id", d."title", d."link"
       ORDER BY "distance" ASC
-      LIMIT $2
+      LIMIT $1
     `,
-      modelId,
       limit,
     );
 
@@ -139,16 +142,46 @@ export class EmbeddingRepository {
     }));
   }
 
-  async getModel(nameInOllama: string): Promise<Model | null> {
-    let model = await this.prisma.model.findUnique({
-      where: { nameInOllama },
-    });
+  async findSimilarChunks(
+    queryVector: number[],
+    metric: string,
+    limit: number = 5,
+  ): Promise<{
+    chunkIdx: number;
+    chunkText: string;
+    displayText: string;
+    documentId: string;
+    distance: number;
+  }[]> {
+    const querySql = toSql(queryVector);
 
-    return model;
-  }
+    const distanceOp = this.getDistanceOp(metric);
 
-  async getAllModels(): Promise<Model[]> {
-    let models = await this.prisma.model.findMany();
-    return models;
+    const results = await this.prisma.$queryRawUnsafe<
+      {
+        chunkIdx: number;
+        chunkText: string;
+        displayText: string;
+        documentId: string;
+        distance: number;
+      }[]
+    >(
+      `
+      SELECT 
+        e."chunkIdx",
+        e."chunkText",
+        e."displayText",
+        e."documentId",
+        e."vector" ${distanceOp} '${querySql}'::vector(768) AS "distance"
+      FROM "Embedding" e
+      INNER JOIN "Document" d ON e."documentId" = d."id"
+      ORDER BY "distance" ASC
+      LIMIT $1
+    `,
+      limit,
+    );
+
+    return results;
   }
+  
 }

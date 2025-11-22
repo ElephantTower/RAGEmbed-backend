@@ -2,16 +2,24 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { OllamaService } from 'src/embedding/ollama.service';
+import { ModelsService } from 'src/embedding/models.service';
 import { EmbeddingRepository } from 'src/embedding/embedding.repository';
 import { DocumentsRepository } from './documents.repository';
 import { JSDOM } from 'jsdom';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { TokenTextSplitter } from '@langchain/textsplitters';
+import { getEncoding, Tiktoken } from "js-tiktoken";
 import { delay } from 'src/utils/delay.util';
 
 interface Chunk {
   chunkId: number;
   text: string;
+  displayText: string;
+  documentId: string;
+}
+
+interface Document {
+  title: string;
+  href: string;
   documentId: string;
 }
 
@@ -26,12 +34,13 @@ interface EmbeddingResult {
 export class ParserService {
   private readonly logger = new Logger(ParserService.name);
   private readonly baseUrl: string;
+  private readonly encoding: Tiktoken;
   private readonly contentsUrl: string;
 
   constructor(
     private configService: ConfigService,
     private httpService: HttpService,
-    private ollamaService: OllamaService,
+    private modelsService: ModelsService,
     private embeddingRepository: EmbeddingRepository,
     private documentsRepository: DocumentsRepository,
   ) {
@@ -43,6 +52,7 @@ export class ParserService {
       'DOCS_CONTENT_URL',
       'https://pascalabc.net/downloads/pabcnethelp/webhelpcontents.htm',
     );
+    this.encoding = getEncoding("cl100k_base");
   }
 
   async parseTitles(): Promise<{ title: string; href: string }[]> {
@@ -101,7 +111,7 @@ export class ParserService {
       const body = document.querySelector('body');
       if (!body) return '';
 
-      const elements = document.querySelectorAll('h1, h2, p, table, code');
+      const elements = document.querySelectorAll('h1, h2, p, table, code, li, span');
       let text = '';
 
       for (const el of elements) {
@@ -128,35 +138,41 @@ export class ParserService {
   ): Promise<Chunk[]> {
     if (!text) return [];
 
-    const splitter = new RecursiveCharacterTextSplitter({
-      chunkSize: chunkSize,
-      chunkOverlap: chunkOverlap,
-      separators: ['\n\n', '\n', ' ', ''],
-    });
+    const tokens = this.encoding.encode(text);
+    const chunks: Chunk[] = [];
+    const step = chunkSize - chunkOverlap;
 
-    const chunks = await splitter.splitText(text);
-    return chunks.map((chunk, index) => ({
-      chunkId: index,
-      text: chunk,
-      documentId: documentId,
-    }));
+    let pos = 0;
+    let id = 0;
+
+    while (pos < tokens.length) {
+      const chunkEnd = Math.min(pos + chunkSize, tokens.length);
+
+      const fullTokens = tokens.slice(pos, chunkEnd);
+      const fullText = this.encoding.decode(fullTokens);
+
+      const displayStart = id === 0 ? 0 : chunkOverlap;
+      const displayTokens = fullTokens.slice(displayStart);
+      const displayText = this.encoding.decode(displayTokens);
+
+      chunks.push({
+        chunkId: id++,
+        documentId,
+        text: fullText,
+        displayText,
+      });
+
+      pos += step;
+    }
+
+    return chunks;
   }
 
-  async collectEmbeddings(
-    delayMs: number = 1000,
-    chunkSize: number = 1000,
-    chunkOverlap: number = 300,
-    batchSize: number = 16,
-    limit: number = 5,
-    modelNames: string[] = []
-  ) {
-    const documents = await this.parseTitles();
-
-    const processedDocuments: {
-      title: string;
-      href: string;
-      documentId: string;
-    }[] = [];
+  async updateDocuments(
+    documents: { title: string; href: string }[]
+  ): Promise<Document[]>
+  {
+    const processedDocuments: Document[] = [];
     for (const doc of documents) {
       const fullLink = `${this.baseUrl}${doc.href}`;
       try {
@@ -169,12 +185,17 @@ export class ParserService {
         this.logger.error(`Failed to upsert document ${doc.title}:`, error);
       }
     }
+    return processedDocuments;
+  }
 
-    const limitedDocuments = processedDocuments.slice(0, limit);
-    let processedCount = 0;
-
+  async prepareChunks(
+    documents: Document[],
+    delayMs: number,
+    chunkSize: number,
+    chunkOverlap: number,
+  ): Promise<Chunk[]> {
     const allChunks: Chunk[] = [];
-    for (const document of limitedDocuments) {
+    for (const document of documents) {
       this.logger.log(`Processing document: ${document.title}`);
       const text = await this.getTextFromDocument(document.href);
       if (!text.trim()) {
@@ -194,69 +215,80 @@ export class ParserService {
         continue;
       }
 
-      processedCount += 1;
       allChunks.push(...chunks);
       await delay(delayMs);
     }
+    return allChunks;
+  }
 
-    const models = await this.embeddingRepository.getAllModels();
-    for (const model of models) {
-      if (modelNames.length > 0 && !modelNames.includes(model.nameInOllama)) {
-        continue;
-      }
+  async collectEmbeddings(
+    delayMs: number = 1000,
+    chunkSize: number = 500,
+    chunkOverlap: number = 100,
+    batchSize: number = 16,
+    limit: number = 2,
+  ) {
+    const documents = await this.parseTitles();
 
-      this.logger.log(`  Model: ${model.nameInOllama}`);
-      for (let i = 0; i < allChunks.length; i += batchSize) {
-        const batchChunks = allChunks.slice(i, i + batchSize);
-        const input = batchChunks.map((chunk) => model.documentPrefix + ' ' + chunk.text);
-        this.logger.log(`Processing batch ${i / batchSize} for model ${model.nameInOllama}`);
-        try {
-          const batchEmbeddings = await this.ollamaService.generateEmbeddings(
-            input,
-            model.nameInOllama,
-          );
+    const processedDocuments = await this.updateDocuments(documents);
 
-          if (batchEmbeddings.length !== input.length) {
-            this.logger.error(
-              `Mismatch in batch size for document ${document.title}, model ${model.nameInOllama}, expected ${input.length}, got ${batchEmbeddings.length}`,
-            );
-            continue;
-          }
+    const limitedDocuments = processedDocuments.slice(0, limit);
 
-          for (
-            let bacthChunkInd = 0;
-            bacthChunkInd < batchChunks.length;
-            bacthChunkInd += 1
-          ) {
-            try {
-              await this.embeddingRepository.saveEmbedding(
-                batchChunks[bacthChunkInd].documentId,
-                model.id,
-                batchChunks[bacthChunkInd].chunkId,
-                batchEmbeddings[bacthChunkInd],
-              );
-            } catch (error) {
-              this.logger.error(
-                `Failed to save embedding for batch ${i / batchSize}, index ${bacthChunkInd}, with ${model.nameInOllama}:`,
-                error,
-              );
-            }
-          }
-        } catch (error) {
+    const allChunks = await this.prepareChunks(
+      limitedDocuments,
+      delayMs,
+      chunkSize,
+      chunkOverlap
+    );
+
+    for (let i = 0; i < allChunks.length; i += batchSize) {
+      const batchChunks = allChunks.slice(i, i + batchSize);
+      const input = batchChunks.map((chunk) => 'search_document: ' + chunk.text);
+      this.logger.log(`Processing batch ${i / batchSize}`);
+      try {
+        const batchEmbeddings = await this.modelsService.generateEmbeddings(input);
+
+        if (batchEmbeddings.length !== input.length) {
           this.logger.error(
-            `Error processing batch ${i / batchSize}, model ${model.nameInOllama}:`,
-            error,
+            `Mismatch in batch size for document ${document.title}, expected ${input.length}, got ${batchEmbeddings.length}`,
           );
+          continue;
         }
+
+        for (
+          let bacthChunkInd = 0;
+          bacthChunkInd < batchChunks.length;
+          bacthChunkInd += 1
+        ) {
+          try {
+            await this.embeddingRepository.saveEmbedding(
+              batchChunks[bacthChunkInd].documentId,
+              batchChunks[bacthChunkInd].text,
+              batchChunks[bacthChunkInd].displayText,
+              batchChunks[bacthChunkInd].chunkId,
+              chunkOverlap,
+              batchEmbeddings[bacthChunkInd],
+            );
+          } catch (error) {
+            this.logger.error(
+              `Failed to save embedding for batch ${i / batchSize}, index ${bacthChunkInd}:`,
+              error,
+            );
+          }
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error processing batch ${i / batchSize}:`,
+          error,
+        );
       }
     }
 
     this.logger.log(
-      `Collection completed. Processed ${processedCount} documents.`,
+      `Collection completed`,
     );
     return {
       success: true,
-      processed: processedCount,
       total: limitedDocuments.length,
     };
   }

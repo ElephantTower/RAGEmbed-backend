@@ -12,14 +12,14 @@ const ParseDocsSchema = z.object({
   chunkSize: z.coerce
     .number()
     .optional()
-    .default(1500)
+    .default(500)
     .refine((val) => val > 0 && val <= 5000, {
       message: 'ChunkSize must be between 1 and 5000',
     }),
   chunkOverlap: z.coerce
     .number()
     .optional()
-    .default(300)
+    .default(100)
     .refine((val) => val >= 0 && val < 1000, {
       message: 'ChunkOverlap must be between 0 and 999',
     }),

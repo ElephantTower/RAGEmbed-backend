@@ -15,11 +15,10 @@ export class ParserController {
   ): Promise<{ message: string; result?: any }> {
     const {
       delayMs = 1000,
-      chunkSize = 1000,
-      chunkOverlap = 300,
+      chunkSize = 500,
+      chunkOverlap = 100,
       batchSize = 16,
       limit = 5,
-      modelNames = []
     } = dto;
 
     this.logger.log(
@@ -33,7 +32,6 @@ export class ParserController {
         chunkOverlap,
         batchSize,
         limit,
-        modelNames
       );
       return { message: 'Parsing started' };
     } catch (error) {

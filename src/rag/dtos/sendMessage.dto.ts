@@ -9,16 +9,24 @@ const MetricSchema = z.union([
   z.literal('inner_product'),
 ]);
 
-const FindSimilarSchema = z.object({
+const SendMessageSchema = z.object({
   input: z.string().min(1, 'Input must not be empty'),
   metric: MetricSchema.default('cosine'),
-  length: z.coerce
+  topChunks: z.coerce
     .number()
     .optional()
-    .default(5)
+    .default(10)
     .refine((val) => val > 0 && val <= 50, {
       message: 'Length must be between 1 and 50',
     }),
+  topDocuments: z.coerce
+    .number()
+    .optional()
+    .default(2)
+    .refine((val) => val > 0 && val <= 50, {
+      message: 'Length must be between 1 and 50',
+    }),
+  stream: z.boolean().default(true)
 });
 
-export class FindSimilarDto extends createZodDto(FindSimilarSchema) {}
+export class SendMessageDto extends createZodDto(SendMessageSchema) {}

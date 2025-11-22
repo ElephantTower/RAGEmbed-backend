@@ -1,17 +1,18 @@
 model Embedding {
   id String @id @default(cuid())
 
-  documentId String
-  modelId    String
-  chunkIdx   Int
+  documentId    String
+  chunkIdx      Int
+  chunkText     String
+  displayText   String
+  overlap       Int
 
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  model    Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  document Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   vector Unsupported("vector(768)")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([documentId, modelId, chunkIdx])
+  @@unique([documentId, chunkIdx])
 }
