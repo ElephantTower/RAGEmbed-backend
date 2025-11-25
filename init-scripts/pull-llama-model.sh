@@ -4,5 +4,5 @@ echo "Starting Ollama server..."
 ollama serve & 
 sleep 5
 ollama pull ${LLM_MODEL}
-echo 'Model ${LLM_MODEL} downloaded adn ready!'
+echo "Model ${LLM_MODEL} downloaded and ready!"
 wait
