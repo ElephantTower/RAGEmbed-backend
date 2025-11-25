@@ -25,10 +25,7 @@ export class RAGController {
   }
 
   @Post('sendMessage')
-  async sendMessage(
-    @Body() dto: SendMessageDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async sendMessage(@Body() dto: SendMessageDto, @Res() res: Response) {
     const { input, metric, topChunks, topDocuments, stream } = dto;
 
     if (stream) {
@@ -56,6 +53,6 @@ export class RAGController {
       topDocuments,
     );
 
-    return results;
+    return res.json(results);
   }
 }
