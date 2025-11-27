@@ -12,6 +12,6 @@ import { AdminSecretGuard } from './admin-secret.guard';
   imports: [ConfigModule, PrismaModule, HttpModule, EmbeddingModule],
   providers: [ParserService, DocumentsRepository, AdminSecretGuard],
   controllers: [ParserController],
-  exports: [ParserService],
+  exports: [ParserService, DocumentsRepository],
 })
 export class ParserModule {}

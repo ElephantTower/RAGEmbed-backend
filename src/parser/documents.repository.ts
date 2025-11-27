@@ -17,4 +17,8 @@ export class DocumentsRepository {
   async findByLink(link: string): Promise<Document | null> {
     return this.prisma.document.findUnique({ where: { link } });
   }
+
+  async findByIds(ids: string[]): Promise<Document[] | null> {
+    return this.prisma.document.findMany({ where: { id: { in: ids } } });
+  }
 }
