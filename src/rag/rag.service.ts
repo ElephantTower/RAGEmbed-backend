@@ -3,7 +3,6 @@ import { ModelsService } from '../embedding/models.service';
 import { EmbeddingRepository } from '../embedding/embedding.repository';
 import { Response } from 'express';
 import { DocumentsRepository } from 'src/parser/documents.repository';
-import { Document } from '@prisma/client';
 
 interface RetrievedChunk {
   chunkIdx: number;
@@ -147,18 +146,18 @@ export class RAGService {
       );
 
       const finalChunks = bestIndicies.map((i) => mergedChunks[i].text);
-
+      
       const documentsArr = await this.documentsRepository.findByIds(
         mergedChunks.map((chunk) => chunk.documentId),
       );
-      const documentsMap: { [key: string]: Document } =
+      const documentsMap: { [key: number]: Document } =
         documentsArr?.reduce((acc, currentDocument) => {
           acc[currentDocument.id] = currentDocument;
           return acc;
         }, {}) ?? {};
 
       const finalLinks = bestIndicies.map(
-        (i) => documentsMap[mergedChunks[i].documentId].link,
+        (i) => documentsMap[mergedChunks[i].documentId],
       );
 
       const systemPrompt = `Ты — ассистент по документации PascalABC.NET. Твоя задача — помогать пользователям с вопросами о языке программирования PascalABC.NET, его функциях, синтаксисе и примерах на основе официальной документации.
