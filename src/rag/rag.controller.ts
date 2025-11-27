@@ -1,4 +1,11 @@
-import { Controller, Post, Body, Query, ParseIntPipe, Res } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Query,
+  ParseIntPipe,
+  Res,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { RAGService } from './rag.service';
 import { FindSimilarDto } from './dtos/findSimilar.dto';
@@ -12,11 +19,7 @@ export class RAGController {
   async findSimilar(@Body() dto: FindSimilarDto) {
     const { input, metric, length } = dto;
 
-    const results = await this.ragService.findSimilar(
-      input,
-      metric,
-      length,
-    );
+    const results = await this.ragService.findSimilar(input, metric, length);
 
     return results;
   }
@@ -33,7 +36,7 @@ export class RAGController {
       res.flushHeaders();
 
       await this.ragService.processUserMessageStream(
-        input, 
+        input,
         res,
         metric,
         topChunks,
@@ -47,9 +50,9 @@ export class RAGController {
       input,
       metric,
       topChunks,
-      topDocuments
+      topDocuments,
     );
 
-    return results;
+    return res.json(results);
   }
 }
