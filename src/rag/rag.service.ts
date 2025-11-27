@@ -2,9 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ModelsService } from '../embedding/models.service';
 import { EmbeddingRepository } from '../embedding/embedding.repository';
 import { Response } from 'express';
-import { DocumentsRepository } from 'src/parser/documents.repository';
 
-interface RetrievedChunk {
+interface RetrievedChunk{
   chunkIdx: number;
   chunkText: string;
   displayText: string;
@@ -19,7 +18,6 @@ export class RAGService {
   constructor(
     private modelsService: ModelsService,
     private embeddingRepository: EmbeddingRepository,
-    private documentsRepository: DocumentsRepository,
   ) {}
 
   async findSimilar(
@@ -28,9 +26,10 @@ export class RAGService {
     length: number = 5,
   ): Promise<{ title: string; link: string; distance: number }[]> {
     try {
-      const queryVector = await this.modelsService.generateEmbeddings([
-        'search_query: ' + input,
-      ]);
+
+      const queryVector = await this.modelsService.generateEmbeddings(
+        ['search_query: ' + input],
+      );
       this.logger.log(
         `Generated embedding for query: ${input.substring(0, 50)}...`,
       );
@@ -53,14 +52,9 @@ export class RAGService {
     input: string,
     metric: string = 'cosine',
     topChunks: number = 10,
-    topDocuments: number = 2,
+    topDocuments: number = 2
   ): Promise<any> {
-    const messages = await this.buildMessages(
-      input,
-      metric,
-      topChunks,
-      topDocuments,
-    );
+    const messages = await this.buildMessages(input, metric, topChunks, topDocuments);
     const response = await this.modelsService.chat(messages, false);
     this.logger.log(`Answered with model`);
     return { answer: response.data.message.content };
@@ -71,14 +65,9 @@ export class RAGService {
     res: Response,
     metric: string = 'cosine',
     topChunks: number = 10,
-    topDocuments: number = 2,
+    topDocuments: number = 2
   ) {
-    const messages = await this.buildMessages(
-      input,
-      metric,
-      topChunks,
-      topDocuments,
-    );
+    const messages = await this.buildMessages(input, metric, topChunks, topDocuments);
 
     const response = await this.modelsService.chat(messages, true);
 
@@ -90,15 +79,14 @@ export class RAGService {
         try {
           const json = JSON.parse(line);
           if (json.message?.content) {
-            res.write(
-              `data: ${JSON.stringify({ token: json.message.content })}\n\n`,
-            );
+            res.write(`data: ${JSON.stringify({ token: json.message.content })}\n\n`);
           }
           if (json.done) {
             res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
             res.end();
           }
-        } catch {}
+        } catch {
+        }
       }
     });
 
@@ -118,47 +106,31 @@ export class RAGService {
     input: string,
     metric: string = 'cosine',
     topChunks: number = 10,
-    topDocuments: number = 2,
-  ): Promise<{ role: string; content: string }[]> {
+    topDocuments: number = 2
+  ): Promise<{ role: string; content: string }[]>{
     try {
-      const queryVector = await this.modelsService.generateEmbeddings([
-        'search_query: ' + input,
-      ]);
+      const queryVector = await this.modelsService.generateEmbeddings(['search_query: ' + input]);
 
       this.logger.log(
         `Generated embedding for query: ${input.substring(0, 50)}...`,
       );
 
-      const chunks: RetrievedChunk[] =
-        await this.embeddingRepository.findSimilarChunks(
-          queryVector[0],
-          metric,
-          topChunks,
-        );
+      const chunks: RetrievedChunk[] = await this.embeddingRepository.findSimilarChunks(
+        queryVector[0],
+        metric,
+        topChunks,
+      );
       this.logger.log(`Found ${chunks.length} similar chunks`);
 
       const mergedChunks = this.mergeRetrievedChunks(chunks);
 
       const bestIndicies = await this.modelsService.rerank(
         input,
-        mergedChunks.map((obj) => obj.text),
-        topDocuments,
+        mergedChunks.map(obj => obj.text),
+        topDocuments
       );
 
-      const finalChunks = bestIndicies.map((i) => mergedChunks[i].text);
-      
-      const documentsArr = await this.documentsRepository.findByIds(
-        mergedChunks.map((chunk) => chunk.documentId),
-      );
-      const documentsMap: { [key: number]: Document } =
-        documentsArr?.reduce((acc, currentDocument) => {
-          acc[currentDocument.id] = currentDocument;
-          return acc;
-        }, {}) ?? {};
-
-      const finalLinks = bestIndicies.map(
-        (i) => documentsMap[mergedChunks[i].documentId],
-      );
+      const finalChunks = bestIndicies.map(i => mergedChunks[i].text);
 
       const systemPrompt = `Ты — ассистент по документации PascalABC.NET. Твоя задача — помогать пользователям с вопросами о языке программирования PascalABC.NET, его функциях, синтаксисе и примерах на основе официальной документации.
 
@@ -178,17 +150,12 @@ export class RAGService {
 - Не отвечай подробно на вопросы, не связанные с PascalABC.NET, и не продолжай разговор на отвлечённые темы. Если пользователь просто здоровается (например, "привет"), ответь в живой манере: "Привет! Рад тебя видеть. Я здесь, чтобы помочь с PascalABC.NET — что на уме?" или вариацию.`;
 
       const userContent = `Контекст: \n\n${finalChunks
-        .map(
-          (text, i) =>
-            `--- Фрагмент ${i + 1}. Ссылка: ${finalLinks[i]} ---\n${text}\n`,
-        )
-        .join(
-          '\n\n',
-        )}\n\nВопрос пользователя: ${input}\n\nОтветь на вопрос строго по контексту.`;
-
+        .map((text, i) => `--- Фрагмент ${i + 1} ---\n${text}\n`)
+        .join('\n\n')}\n\nВопрос пользователя: ${input}\n\nОтветь на вопрос строго по контексту.`;
+      
       const messages: { role: string; content: string }[] = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent }
       ];
 
       return messages;
@@ -198,21 +165,15 @@ export class RAGService {
     }
   }
 
-  mergeRetrievedChunks(chunks: RetrievedChunk[]): {
-    text: string;
-    documentId: string;
-    sourceChunkIds: number[];
-    minDistance: number;
-  }[] {
+  mergeRetrievedChunks(
+    chunks: RetrievedChunk[]
+  ):{ text: string; documentId: string; sourceChunkIds: number[]; minDistance: number }[] {
     if (chunks.length === 0) return [];
 
-    const byDoc = chunks.reduce(
-      (acc, c) => {
-        (acc[c.documentId] ??= []).push(c);
-        return acc;
-      },
-      {} as Record<string, RetrievedChunk[]>,
-    );
+    const byDoc = chunks.reduce((acc, c) => {
+      (acc[c.documentId] ??= []).push(c);
+      return acc;
+    }, {} as Record<string, RetrievedChunk[]>);
 
     const result: {
       text: string;

@@ -5,10 +5,9 @@ import { EmbeddingModule } from '../embedding/embedding.module';
 
 import { RAGService } from './rag.service';
 import { RAGController } from './rag.controller';
-import { ParserModule } from 'src/parser/parser.module';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, EmbeddingModule, ParserModule],
+  imports: [ConfigModule, PrismaModule, EmbeddingModule],
   providers: [RAGService],
   controllers: [RAGController],
   exports: [RAGService],
