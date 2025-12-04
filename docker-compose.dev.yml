@@ -49,14 +49,14 @@ services:
     restart: always
 
   embeddings:
-    image: michaelf34/infinity:latest-cpu
+    image: michaelf34/infinity:latest
     container_name: embeddings
     restart: unless-stopped
     ports:
       - "7997:7997"
     environment:
       - INFINITY_ENGINE=torch
-      - INFINITY_DEVICE=cpu
+      - INFINITY_DEVICE=cuda
     volumes:
       - infinity_cache:/app/.cache
     command: > 
@@ -67,6 +67,13 @@ services:
       --host 0.0.0.0
       --log-level info
       --no-model-warmup
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   llm:
     image: ollama/ollama:latest
@@ -89,6 +96,13 @@ services:
       retries: 5
       start_period: 60s
     restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
 volumes:
   dumps:
