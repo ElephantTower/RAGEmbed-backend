@@ -1,11 +1,12 @@
 model Message {
-  id    String @id @default(cuid())
+  id String @id @default(cuid())
 
-  chatId    String
-  chat Chat  @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
-  role Role
-  content String
+  role       Role
+  content    String
+  rawContent String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

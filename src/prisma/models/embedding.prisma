@@ -1,13 +1,13 @@
 model Embedding {
   id String @id @default(cuid())
 
-  documentId    String
-  chunkIdx      Int
-  chunkText     String
-  displayText   String
-  overlap       Int
+  documentId  String
+  chunkIdx    Int
+  chunkText   String
+  displayText String
+  overlap     Int
 
-  document Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   vector Unsupported("vector(768)")
 

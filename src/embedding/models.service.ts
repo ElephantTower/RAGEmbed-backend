@@ -17,17 +17,33 @@ export class ModelsService {
     private configService: ConfigService,
     private httpService: HttpService,
   ) {
-    this.embedderUrl = this.configService.get('EMBEDDER_URL', 'http://embeddings:7997/embeddings');
-    this.embedderName = this.configService.get('EMBEDDER_MODEL', 'deepvk/USER-base');
-    this.rerankerUrl = this.configService.get('RERANKER_URL', 'http://embeddings:7997/rerank');
-    this.rerankerName = this.configService.get('RERANKER_MODEL', 'qilowoq/bge-reranker-v2-m3-en-ru');
-    this.llmUrl = this.configService.get('LLM_URL', 'http://ollama:11434/api/chat');
-    this.llmName = this.configService.get('LLM_MODEL', 'qilowoq/bge-reranker-v2-m3-en-ru');
+    this.embedderUrl = this.configService.get(
+      'EMBEDDER_URL',
+      'http://embeddings:7997/embeddings',
+    );
+    this.embedderName = this.configService.get(
+      'EMBEDDER_MODEL',
+      'deepvk/USER-base',
+    );
+    this.rerankerUrl = this.configService.get(
+      'RERANKER_URL',
+      'http://embeddings:7997/rerank',
+    );
+    this.rerankerName = this.configService.get(
+      'RERANKER_MODEL',
+      'qilowoq/bge-reranker-v2-m3-en-ru',
+    );
+    this.llmUrl = this.configService.get(
+      'LLM_URL',
+      'http://ollama:11434/api/chat',
+    );
+    this.llmName = this.configService.get(
+      'LLM_MODEL',
+      'qilowoq/bge-reranker-v2-m3-en-ru',
+    );
   }
 
-  async generateEmbeddings(
-    input: string[],
-  ): Promise<number[][]> {
+  async generateEmbeddings(input: string[]): Promise<number[][]> {
     try {
       const response = await firstValueFrom(
         this.httpService.post(
@@ -39,8 +55,10 @@ export class ModelsService {
           { timeout: 30000 },
         ),
       );
-      this.logger.log(`Generated embedding with ${this.embedderName}, batchSize: ${response.data.data.length}`);
-      return response.data.data.map(obj => obj.embedding);
+      this.logger.log(
+        `Generated embedding with ${this.embedderName}, batchSize: ${response.data.data.length}`,
+      );
+      return response.data.data.map((obj) => obj.embedding);
     } catch (error) {
       this.logger.error('Failed to generate embedding', error);
       if (error.response) {
@@ -55,7 +73,7 @@ export class ModelsService {
   async rerank(
     query: string,
     documents: string[],
-    topN: number
+    topN: number,
   ): Promise<number[]> {
     try {
       const response = await firstValueFrom(
@@ -67,13 +85,15 @@ export class ModelsService {
             documents: documents,
             return_documents: false,
             raw_scores: false,
-            top_n: topN
+            top_n: topN,
           },
           { timeout: 300000 },
         ),
       );
-      this.logger.log(`Reranked texts with model ${this.rerankerName}: ${topN}/ ${documents.length}`);
-      return response.data.results.map(obj => obj.index);
+      this.logger.log(
+        `Reranked texts with model ${this.rerankerName}: ${topN}/ ${documents.length}`,
+      );
+      return response.data.results.map((obj) => obj.index);
     } catch (error) {
       this.logger.error('Failed to rerank', error);
       if (error.response) {
@@ -87,7 +107,7 @@ export class ModelsService {
 
   async chat(
     messages: { role: string; content: string }[],
-    stream: boolean
+    stream: boolean,
   ): Promise<any> {
     try {
       const config: any = {
@@ -103,8 +123,10 @@ export class ModelsService {
           this.llmUrl,
           {
             model: this.llmName,
-            messages: messages,
-            stream: stream
+            messages: messages.map((message) => {
+              return { role: message.role, content: message.content };
+            }),
+            stream: stream,
           },
           config,
         ),

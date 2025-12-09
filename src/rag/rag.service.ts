@@ -108,7 +108,11 @@ export class RAGService {
       content: m.content,
     }));
 
-    const newMessages: { role: Role; content: string }[] = [];
+    const newMessages: {
+      role: Role;
+      content: string;
+      rawContent?: string;
+    }[] = [];
 
     if (prevMessages.length === 0) {
       newMessages.push(this.buildStarterMessage());
@@ -120,6 +124,7 @@ export class RAGService {
       topChunks,
       topDocuments,
     );
+
     newMessages.push(userMessage);
 
     const response = await this.modelsService.chat(
@@ -132,10 +137,19 @@ export class RAGService {
     let assistantContent = '';
 
     const saveNewMessages = async (
-      newMessages: { role: Role; content: string }[],
+      newMessages: {
+        role: Role;
+        content: string;
+        rawContent?: string;
+      }[],
     ) => {
       for (const msg of newMessages) {
-        await this.chatService.createMessage(chat, msg.content, msg.role);
+        await this.chatService.createMessage(
+          chat,
+          msg.content,
+          msg.role,
+          msg.rawContent,
+        );
       }
     };
 
@@ -192,7 +206,7 @@ export class RAGService {
     metric: string = 'cosine',
     topChunks: number = 10,
     topDocuments: number = 2,
-  ): Promise<{ role: Role; content: string }> {
+  ): Promise<{ role: Role; content: string; rawContent: string }> {
     try {
       const queryVector = await this.modelsService.generateEmbeddings([
         'search_query: ' + input,
@@ -224,14 +238,18 @@ export class RAGService {
         .map((text, i) => `--- Фрагмент ${i + 1} ---\n${text}\n`)
         .join('\n\n')}`;
 
-      return { role: 'user', content: userContent };
+      return { role: 'user', content: userContent, rawContent: input };
     } catch (error) {
       this.logger.error('RAG search failed', error);
       throw error;
     }
   }
 
-  buildStarterMessage(): { role: Role; content: string } {
+  buildStarterMessage(): {
+    role: Role;
+    content: string;
+    rawContent?: string;
+  } {
     const systemPrompt = `Ты — ассистент по документации PascalABC.NET. Твоя задача — помогать пользователям с вопросами о языке программирования PascalABC.NET, его функциях, синтаксисе и примерах на основе официальной документации.
 
 Используй предоставленный контекст для точных ответов и предыдущие сообщения, но никогда не упоминай контекст, источники или процесс поиска в своем ответе. Отвечай так, будто ты знаешь эту информацию наизусть.

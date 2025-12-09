@@ -1,5 +1,5 @@
 model Chat {
-  id    String @id @default(cuid())
+  id String @id @default(cuid())
 
   messages Message[]
 

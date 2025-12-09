@@ -25,14 +25,15 @@ export class ChatService {
     chat: Chat,
     content: string,
     role: Role,
+    rawContent: string | undefined = undefined,
   ): Promise<Message> {
     return this.prisma.message.create({
-      data: { chatId: chat.id, content, role },
+      data: { chatId: chat.id, content, role, rawContent },
     });
   }
 
   async getMessages(chat: Chat): Promise<Message[]> {
-    return this.prisma.message.findMany({
+    const messages = await this.prisma.message.findMany({
       where: {
         chatId: chat.id,
         role: { not: 'system' },
@@ -40,6 +41,12 @@ export class ChatService {
       orderBy: {
         createdAt: 'asc',
       },
+    });
+    return messages.map((message) => {
+      if (message.rawContent) {
+        message.content = message.rawContent;
+      }
+      return message;
     });
   }
 
