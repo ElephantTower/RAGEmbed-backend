@@ -37,10 +37,7 @@ export class ModelsService {
       'LLM_URL',
       'http://ollama:11434/api/chat',
     );
-    this.llmName = this.configService.get(
-      'LLM_MODEL',
-      'qilowoq/bge-reranker-v2-m3-en-ru',
-    );
+    this.llmName = this.configService.get('LLM_MODEL', 'qwen2.5:14b');
   }
 
   async generateEmbeddings(input: string[]): Promise<number[][]> {
